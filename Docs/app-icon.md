@@ -1,18 +1,18 @@
-# Liquid Glass App 图标
+# Liquid Glass app icon
 
-主图标使用 `Resources/AppIcon.icon`，通过 Xcode 的 Icon Composer 图标编译流程打包。前景是可缩放的白色 Mumble 耳机标志，明确启用玻璃材质；背景使用深色自动渐变。原生材质负责光照、高光和浅色、深色、透明及着色外观。
+The primary icon uses `Resources/AppIcon.icon`, packaged through Xcode's Icon Composer compilation pipeline. The foreground is a scalable white Mumble headset with glass material explicitly enabled; the background uses a dark automatic gradient. The native material supplies lighting, highlights, and light, dark, clear, and tinted appearances.
 
-耳机轮廓来自 Mumble 官方 `icons/mumble_small.svg`，作者 Martin Skilnand（2009），使用其 BSD 许可。去掉原图的预绘光影和背景，保留矢量几何，让系统生成效果。许可与出处随 `Legal.html` 打包。
+The headset outline comes from Mumble's official `icons/mumble_small.svg`, created by Martin Skilnand (2009) and distributed under its BSD license. The original painted lighting and background were removed, preserving the vector geometry so the system can generate the effects. Attribution and the license are included in `Legal.html`.
 
-标志经过尺寸与中心调整，可见宽度约占画布 70%、高度约占 75%，比上一版略缩小。顶部 M 形采用平滑转角，耳罩合为圆润轮廓，去掉旧图形内部细缝，麦克风为圆角胶囊。前景使用同向子路径组成的单一轮廓，让相接部分连贯地接受玻璃光照。这些比例是针对该标志的视觉选择，不是 Apple 的硬性百分比要求。主体与圆角边缘保持距离，画布仍为未经预裁圆角的 1024×1024 方形。
+The mark's size and center were adjusted: its visible width is approximately 70% of the canvas and its height approximately 75%, slightly smaller than the preceding version. The M-shaped top has smooth corners, the earcups form rounded outlines without the old internal gaps, and the microphone is a rounded capsule. The foreground is a single compound outline with consistently directed subpaths, allowing adjoining parts to receive continuous glass lighting. These proportions are visual choices for this mark, not percentages mandated by Apple. The mark leaves space around the rounded icon edges; the source canvas remains an uncropped 1024 × 1024 square.
 
-`ASSETCATALOG_COMPILER_APPICON_NAME` 指向 `AppIcon`；移除旧的手写图标列表及 `UIPrerenderedIcon`，由 Xcode 写入实际主图标信息。最低 iOS 版本仍为 18.0，编译器同时生成旧系统的静态回退图标。
+`ASSETCATALOG_COMPILER_APPICON_NAME` points to `AppIcon`. The old manually maintained icon lists and `UIPrerenderedIcon` were removed, allowing Xcode to write the primary icon metadata. The minimum iOS version remains 18.0, and the compiler generates static fallback icons for older supported systems.
 
-已删除 `icon.png`、`icon@2x.png`、`icon7@2x.png`、`icon7@3x.png`、`iconpad.png`、`iconpad@2x.png` 和未被项目使用的 `iTunesArtwork.png`。同时删除它们的 Xcode 文件引用、资源复制条目、空的旧 Apple 图片分组，以及 URL 配置中指向旧 `Icon` 文件的图标声明；`mumble` URL scheme 保留。当前 App 图标的唯一设计源是 `AppIcon.icon/Assets/Mumble.svg`。
+The old `icon.png`, `icon@2x.png`, `icon7@2x.png`, `icon7@3x.png`, `iconpad.png`, `iconpad@2x.png`, and unused `iTunesArtwork.png` were deleted. Their Xcode file references, resource-copy entries, empty legacy Apple artwork group, and URL configuration entry referring to the old `Icon` file were also removed. The `mumble` URL scheme remains available. The sole design source for the current app icon is `AppIcon.icon/Assets/Mumble.svg`.
 
-## 验证
+## Validation
 
-- Apple `ictool` 成功导出默认、深色和透明外观，已查看实际导出结果。
-- iPhone Release、模拟器 Debug 构建通过，无 App 构建警告。
-- 真机安装包的主图标名为 `AppIcon`；`Assets.car` 包含原生 `IconGroup`、`IconImageStack` 与矢量前景，而不仅是扁平 PNG。
-- 最新版本已安装到 iPhone。导出预览和构建产物位于临时目录。
+- Apple's `ictool` exported default, dark, and clear appearances successfully; the actual exports were inspected.
+- iPhone Release and Simulator Debug builds passed without app build warnings.
+- The device package identifies its primary icon as `AppIcon`. `Assets.car` contains native `IconGroup`, `IconImageStack`, and vector foreground assets rather than only flat PNGs.
+- The icon build was installed on an iPhone. Exported previews and build products are kept in temporary directories.

@@ -1,34 +1,34 @@
-# 旧代码与资源清理
+# Legacy code and resource cleanup
 
-这次检查按工程引用、编译源文件、打包资源、运行入口和实际调用关系逐项核对，删除失去用途的实现；仍承担协议兼容、用户数据迁移或运行功能的代码继续保留。
+This audit checked project references, compiled sources, packaged resources, runtime entry points, and actual call sites. Obsolete implementations were removed; code that still supports protocol compatibility, user-data migration, or active functionality was retained.
 
-## 删除与替换
+## Removals and replacements
 
-- 删除 46 个旧文件：6 个 nib/storyboard、8 个 PaintCode 图稿、旧数字角标组件、服务器绘图按钮和翻转动画，以及不再使用的背景、颜色、表头辅助类。
-- 删除不可达的混音调试界面和未在任何构建配置启用的远程控制功能。音频内部的诊断快照仍供恢复测试使用，正常界面不创建调试计时器。
-- 删除旧 SenTestingKit/OCUnit 目标、运行脚本和测试包配置；消息链接与转义的有效测试迁到可直接运行的 Foundation 测试。
-- 删除旧 GeoIP 国家/大洲表和 Python 2 生成器；国家名称交给 Foundation，大洲名称使用现有本地化资源。公共服务器分组、去重、离线快照和下载缓存继续工作。删除未被解析器使用的重复 XML 加载与长驻去重集合。
-- 删除过时的 HTTP 公共列表更新脚本和会覆盖英文翻译的旧更新脚本；应用的 HTTPS 列表刷新与完整翻译检查保留。
-- 删除闲置的橙色色板和空资源目录。原生 `AppIcon.icon` 直接交给 Xcode 编译，同时生成旧系统图标。
-- 删除 AppStore/BetaDist 的重复配置、失效宏、旧维护者的签名身份、macOS 部署设置和 Bitcode 设置；工程保留 Debug/Release，Archive 使用 Release。
-- 删除旧窗口和启动页的资源引用；应用从 SceneDelegate 创建界面，启动画面使用系统 `UILaunchScreen`。
-- 后台声明只保留实际使用的 `audio`；移除没有对应实现的 PushKit VoIP、系统 PushToTalk 和 CoreBluetooth central 声明。
-- 五个证书文件统一使用 ARC，移除全部手动 retain/release 和 ARC/MRC 双实现分支。Security.framework 的复制结果明确转交 ARC，借用引用继续使用显式桥接；修正证书导入弹窗的强引用环和不安全引用。
-- 删除已被独立密码重试对话框替代的旧密码处理分支、写入后不再读取的字段、闲置图片方法和旧的两次图片遮罩绘制。缩略图使用 `UIGraphicsImageRenderer`。
-- 清理不再随应用使用的角标/旧图稿许可展示；当前图标、翻译、FMDB 和库依赖许可继续保留。
-- 清理四条被删除界面独占的翻译；12 种语言各有 299 条实际使用的文案，并保留系统语言切换和权限说明。
+- Removed 46 obsolete files: six nib/storyboard files, eight PaintCode drawings, the old numeric badge component, custom server drawing button, flip transition, and unused background, color, and table-header helpers.
+- Removed the unreachable mixer debug screen and remote-control functionality that no build configuration enabled. Internal audio diagnostic snapshots remain available to recovery tests; the normal interface does not create debug timers.
+- Removed the obsolete SenTestingKit/OCUnit target, runner, and test-bundle configuration. Valid message-link and escaping checks were migrated to an executable Foundation test.
+- Removed the old GeoIP country/continent tables and Python 2 generator. Foundation provides country names, while continent names use existing translations. Public-server grouping, deduplication, the offline snapshot, and downloaded cache remain functional. Unused duplicate XML loading and the retained deduplication set were removed.
+- Removed the obsolete HTTP public-list refresh script and localization updater that could overwrite English translations. The app's HTTPS list refresh and complete localization checks remain available.
+- Removed the unused orange accent color and empty asset catalog. Xcode directly compiles the native `AppIcon.icon` document and generates fallback icons for older systems.
+- Removed duplicate AppStore/BetaDist configurations, unused macros, a former maintainer's signing identity, macOS deployment settings, and Bitcode settings. The project retains Debug and Release; Archive uses Release.
+- Removed resource references to the old main window and launch storyboard. SceneDelegate creates the interface, and the launch screen uses the system's `UILaunchScreen` configuration.
+- Retained only the implemented `audio` background mode. Removed declarations for PushKit VoIP, system PushToTalk, and CoreBluetooth central services, which the app does not implement.
+- Migrated five certificate files to ARC, removing manual retain/release calls and dual ARC/MRC branches. Copy results from Security.framework transfer ownership explicitly to ARC; borrowed references use explicit bridging. Fixed strong reference cycles and unsafe references in certificate import dialogs.
+- Removed the old password-handling branch replaced by the dedicated retry dialog, write-only fields, unused image methods, and the old two-pass image-mask drawing. Thumbnails use `UIGraphicsImageRenderer`.
+- Removed license-screen sections for the retired badge and artwork. Notices for the current icon, translations, FMDB, and library dependencies remain included.
+- Removed four translations used only by deleted screens. Each of the 12 languages contains 299 active interface strings; system language selection and permission descriptions remain available.
 
-工程移除了 68 个旧对象。剩余 264 个对象全部可从工程根到达，没有悬空文件引用或空分组；57 个应用源文件全部在编译目标中，Resources 中的运行资源全部在打包路径中。
+The project lost 68 obsolete objects. All 264 remaining objects are reachable from the project root, with no dangling file references or empty groups. All 57 app source files belong to the build target, and all runtime resources under Resources are included in the packaging paths.
 
-## 保留的兼容实现
+## Retained compatibility code
 
-- iOS 18–26 的音频会话和界面 API 分支。
-- 旧 Mumble 服务器的 Opus 包格式、公共服务器 ping 格式、TCP 语音回退。
-- 既有数据库、收藏、设置及旧证书身份；旧编码器选项向 Opus 的迁移。
-- 仍使用的消息 HTML/数据 URL 处理、公共服务器离线快照、iPad 兼容入口。
-- libmumble 的固定上游源码快照和许可证。FMDB 的集成修改由已有补丁重放，不重置当前子模块工作内容。
+- Audio-session and interface API branches for iOS 18–26.
+- Older Mumble servers' Opus packet format, public-server ping format, and TCP voice fallback.
+- Existing databases, favourites, settings, and certificate identities, including migration of old codec preferences to Opus.
+- Active message HTML/data-URL processing, the public-server offline snapshot, and the iPad compatibility entry point.
+- The pinned libmumble source snapshot and licenses. Existing FMDB integration changes are replayed through the checked-in patch rather than resetting the submodule's working contents.
 
-## 可重复检查
+## Repeatable checks
 
 ```sh
 python3 Scripts/check-project-integrity.py
@@ -37,16 +37,16 @@ bash Scripts/test-text-messages.sh
 bash Scripts/test-libmumble.sh
 ```
 
-工程检查覆盖引用有效性、对象可达性、所有应用源文件是否编译、是否留有未打包资源。已加入 GitHub Actions，消息转换测试也加入自动检查。
+The project checker validates references, object reachability, compilation of every app source, and resource packaging. It runs in GitHub Actions, alongside the message-conversion tests.
 
-界面回归额外覆盖公共列表分组、系统国家名称、重复/缺失字段及缓存刷新；实际钥匙串中的新证书详情和控制器释放也纳入检查。音频和界面测试应用只在临时目录生成，使用独立应用标识，不进入 Git。
+Additional interface regressions cover public-list grouping, system country names, duplicate/missing fields, cache refresh, details backed by actual Keychain identities, and controller deallocation. Audio and interface test apps are generated in temporary directories with an isolated bundle identifier; they are not tracked by Git.
 
-## 本次验证结果
+## Validation results
 
-- iPhone Release、带隔离标识的 Simulator Debug 构建通过，无应用构建警告；新建的 iPhone 构建目录验证了完整资源打包。
-- 两个包均保留原生图标、系统生成的兼容图标、`mumble` 链接入口与音频后台模式；旧窗口、启动 storyboard、国家表及旧 PNG 未进入包中。12 种语言各 299 条文案和权限说明通过源代码及包内检查。
-- 英文完整界面检查通过；最终代码的中文完整检查通过，涵盖证书生成/导入/详情释放、密码重试保存、公共列表、令牌、语音检测、表单与辅助功能布局、消息、系统图片查看及导航菜单。
-- 最终版本的音频生命周期、采集恢复、静音/deafen、媒体共存和频道列表回归检查通过；后端两项测试通过，消息转换测试通过。
-- 同一模拟器包在 iOS 18.6 实际启动到首次欢迎页，运行过程保持存活。这个启动检查不代替真实设备的音频与能耗测量。
+- iPhone Release and isolated Simulator Debug builds passed without app build warnings. A fresh iPhone build directory verified complete resource packaging.
+- Both packages contain the native icon, generated fallback icons, the `mumble` URL scheme, and the audio background mode. The obsolete window, launch storyboard, country tables, and legacy PNGs are absent. Source and package checks passed for all 12 languages, each with 299 strings and permission descriptions.
+- The complete English interface audit passed. The final code passed the complete Chinese audit, covering certificate generation/import/details deallocation, password retry/save, public lists, tokens, voice detection, forms, accessibility layout, messages, system image previews, and navigation menus.
+- Final audio lifecycle, capture recovery, mute/deafen, media coexistence, and channel-list regressions passed. Both backend tests and the message-conversion tests passed.
+- The same Simulator package launched to the initial welcome page on iOS 18.6 and remained running. This startup check does not replace physical-device audio or energy measurements.
 
-所有回归测试生成的应用、动态库、截图和报告均保存在临时目录，未加入仓库。
+Generated regression apps, dynamic libraries, screenshots, and reports are kept in temporary directories and are not added to the repository.
