@@ -57,6 +57,9 @@ certificate gating/pinning/rotation, TLS SNI, login/tokens, channel updates,
 fragmented and large control messages, public server pings, new and legacy Opus
 send/receive, TCP fallback, and OCB nonce/replay/tamper behavior. It requires no
 external service or real identity. This does not validate microphone hardware.
+Speaking-indicator checks wait for the actual timer-driven state change with a
+bounded deadline. A separate case deliberately delays the main queue across the
+timer deadline, covering scheduler delays on hosted CI runners.
 
 ## Idle resource use
 

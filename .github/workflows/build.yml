@@ -21,7 +21,8 @@ jobs:
           git -C "$RUNNER_TEMP/vcpkg" checkout e456309491fd875487bf02b8a0dca76c1b1b00cc
           "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
           echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: vcpkg-cache
         with:
           path: ~/.cache/vcpkg/archives
           key: libmumble-vcpkg-${{ runner.os }}-${{ hashFiles('Dependencies/libmumble/vcpkg.json', 'Scripts/vcpkg-triplets/*') }}
@@ -33,3 +34,9 @@ jobs:
         run: xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
       - name: Build Simulator application
         run: xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
+      - name: Save dependency cache
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}

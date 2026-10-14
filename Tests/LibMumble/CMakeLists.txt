@@ -20,3 +20,5 @@ target_link_libraries(MumbleBackendTests PRIVATE Mumble::libmumble protobuf::lib
 enable_testing()
 add_test(NAME MumbleBackendTests COMMAND MumbleBackendTests)
 set_tests_properties(MumbleBackendTests PROPERTIES TIMEOUT 60 ENVIRONMENT "TZ=Pacific/Honolulu")
+add_test(NAME MumbleTalkIndicatorsDelayed COMMAND MumbleBackendTests --delayed-talk-indicators)
+set_tests_properties(MumbleTalkIndicatorsDelayed PROPERTIES TIMEOUT 15)

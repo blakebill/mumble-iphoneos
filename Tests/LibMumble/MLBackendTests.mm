@@ -20,6 +20,19 @@ static bool completed=false;
 // Substitute the hardware audio layer while testing its actual wire/Opus boundary.
 @implementation MLAudio
 + (instancetype)sharedAudio { static MLAudio *audio=[self new]; return audio; }
+- (BOOL)isRunning { return NO; }
+- (void)start {}
+- (void)resumeIfNeeded {}
+- (void)stop {}
+- (void)restart {}
+- (void)readAudioSettings:(MLAudioSettings *)settings { *settings={}; }
+- (void)updateAudioSettings:(MLAudioSettings *)settings {}
+- (BOOL)echoCancellationAvailable { return NO; }
+- (float)speechProbablity { return 0; }
+- (float)peakCleanMic { return 0; }
+- (void)beginMetering {}
+- (void)endMetering {}
+- (NSDictionary *)copyAudioOutputMixerDebugInfo { return @{}; }
 - (void)setMainConnectionForAudio:(MLConnection *)connection {}
 - (void)setLocalMuted:(BOOL)muted deafened:(BOOL)deafened {}
 - (void)setBandwidthLimit:(uint32_t)bandwidth {}
@@ -265,7 +278,15 @@ static void waitForIndicators(NSTimeInterval seconds) {
     NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:seconds];
     while (deadline.timeIntervalSinceNow>0) [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
 }
-static void talkIndicatorTests() { @autoreleasepool {
+static bool waitForTalkState(MLUser *user, MLTalkState state) {
+    // NSTimer delivery can be coalesced or delayed by a busy hosted runner.
+    // Observe the real state with a deadline instead of assuming 50ms scheduling slack.
+    NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:2];
+    while (user.talkState!=state && deadline.timeIntervalSinceNow>0)
+        [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
+    return user.talkState==state;
+}
+static void talkIndicatorTests(bool delayedRunLoop=false) { @autoreleasepool {
     MLServerModel *model=[[MLServerModel alloc] initWithConnection:nil];
     MumbleTCP::UserState state; state.set_session(2); state.set_name("Peer"); state.set_channel_id(0);
     [model receiveType:(uint16_t)tcp::Message::Type::UserState data:MLData(tcp::Pack(state).data())];
@@ -273,12 +294,16 @@ static void talkIndicatorTests() { @autoreleasepool {
     // The only audio packet can also be the final packet of a brief utterance.
     [model receivedVoiceForSession:2 talkState:MLTalkStateTalking hasAudio:YES terminator:YES];
     assert(peer.talkState==MLTalkStateTalking); waitForIndicators(.15); assert(peer.talkState==MLTalkStateTalking);
-    waitForIndicators(.25); assert(peer.talkState==MLTalkStatePassive);
+    if (delayedRunLoop) {
+        // Delay main-queue work across the timer's deadline, as CI load can do.
+        dispatch_async(dispatch_get_main_queue(), ^{ [NSThread sleepForTimeInterval:.4]; });
+    }
+    assert(waitForTalkState(peer,MLTalkStatePassive));
     [model receivedVoiceForSession:2 talkState:MLTalkStateWhispering hasAudio:YES terminator:NO];
     waitForIndicators(.5);
     [model receivedVoiceForSession:2 talkState:MLTalkStateShouting hasAudio:YES terminator:NO];
     waitForIndicators(.4); assert(peer.talkState==MLTalkStateShouting);
-    waitForIndicators(.5); assert(peer.talkState==MLTalkStatePassive);
+    assert(waitForTalkState(peer,MLTalkStatePassive));
     [model receivedVoiceForSession:2 talkState:MLTalkStateTalking hasAudio:YES terminator:NO];
     [model reset]; waitForIndicators(.9); assert([model userWithSession:2]==nil);
     printf("PASS: brief speech visible, active speech refresh, lost terminator timeout and reset cancellation\n");
@@ -309,4 +334,7 @@ static void keepaliveTimingTests() {
     assert(MLKeepaliveInterval(true,now,now-seconds(60))==seconds(15));
     printf("PASS: authentication and active voice retain fast keepalive; quiet connection uses 15 seconds\n");
 }
-int main() { keepaliveTimingTests(); imageMessageConfigTests(); talkIndicatorTests(); runTransport(false); runTransport(true); return 0; }
+int main(int argc, const char *argv[]) {
+    if (argc==2 && !strcmp(argv[1],"--delayed-talk-indicators")) { talkIndicatorTests(true); return 0; }
+    keepaliveTimingTests(); imageMessageConfigTests(); talkIndicatorTests(); runTransport(false); runTransport(true); return 0;
+}
