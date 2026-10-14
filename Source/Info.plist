@@ -27,8 +27,6 @@
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
-			<key>CFBundleURLIconFile</key>
-			<string>Icon</string>
 			<key>CFBundleURLName</key>
 			<string>com.blakebill.mumble</string>
 			<key>CFBundleURLSchemes</key>

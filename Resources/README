@@ -4,7 +4,9 @@ The home-screen application icon uses the native layered AppIcon.icon document.
 Its headset geometry is adapted from Mumble's mumble_small.svg by Martin
 Skilnand (2009), under the BSD license in Mumble-Translations-LICENSE.txt.
 Icon Composer supplies the glass material, lighting and appearance variants.
-The original raster application icons remain in the repository root.
+Legacy icon/iconpad PNGs and the old iTunes artwork have been removed.
+Xcode generates all packaged icon sizes, including older-iOS fallbacks, from
+AppIcon.icon. Do not add duplicate raster app icons to Copy Bundle Resources.
 Message attachments are user/server content and are not bundled interface artwork.
 
 Interface translations include matching terminology from mumble-voip/mumble,

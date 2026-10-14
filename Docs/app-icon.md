@@ -6,7 +6,9 @@
 
 标志经过尺寸与中心调整，可见宽度约占画布 70%、高度约占 75%，比上一版略缩小。顶部 M 形采用平滑转角，耳罩合为圆润轮廓，去掉旧图形内部细缝，麦克风为圆角胶囊。前景使用同向子路径组成的单一轮廓，让相接部分连贯地接受玻璃光照。这些比例是针对该标志的视觉选择，不是 Apple 的硬性百分比要求。主体与圆角边缘保持距离，画布仍为未经预裁圆角的 1024×1024 方形。
 
-`ASSETCATALOG_COMPILER_APPICON_NAME` 指向 `AppIcon`；移除旧的手写图标列表及 `UIPrerenderedIcon`，由 Xcode 写入实际主图标信息。最低 iOS 版本仍为 18.0，编译器同时生成旧系统的静态回退图标。原始 PNG 留在仓库中。
+`ASSETCATALOG_COMPILER_APPICON_NAME` 指向 `AppIcon`；移除旧的手写图标列表及 `UIPrerenderedIcon`，由 Xcode 写入实际主图标信息。最低 iOS 版本仍为 18.0，编译器同时生成旧系统的静态回退图标。
+
+已删除 `icon.png`、`icon@2x.png`、`icon7@2x.png`、`icon7@3x.png`、`iconpad.png`、`iconpad@2x.png` 和未被项目使用的 `iTunesArtwork.png`。同时删除它们的 Xcode 文件引用、资源复制条目、空的旧 Apple 图片分组，以及 URL 配置中指向旧 `Icon` 文件的图标声明；`mumble` URL scheme 保留。当前 App 图标的唯一设计源是 `AppIcon.icon/Assets/Mumble.svg`。
 
 ## 验证
 
