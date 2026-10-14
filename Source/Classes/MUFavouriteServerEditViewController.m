@@ -1,3 +1,4 @@
+#import "MUInterface.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -39,19 +40,12 @@
 #pragma mark -
 #pragma mark Initialization
 
-+ (void) configureTableViewConstraintWithCell:(UITableViewCell *)cell andTextField:(UITextField *)textField {
-    [textField setTranslatesAutoresizingMaskIntoConstraints:NO];
-
-    NSLayoutConstraint *top = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeTop multiplier:1 constant:8];
-    NSLayoutConstraint *bottom = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeBottom relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeBottom multiplier:1 constant:-8];
-    NSLayoutConstraint *left = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeLeft relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeLeft multiplier:1 constant:110];
-    NSLayoutConstraint *right = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeRight relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeRight multiplier:1 constant:0];
-
-    [NSLayoutConstraint activateConstraints:@[top, bottom, left, right]];
+ + (void)configureTableViewConstraintWithCell:(UITableViewCell *)cell title:(NSString *)title andTextField:(UITextField *)field {
+    MUConfigureFormCell(cell, title, field);
 }
 
 - (id) initInEditMode:(BOOL)editMode withContentOfFavouriteServer:(MUFavouriteServer *)favServ {
-    if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
         _editMode = editMode;
         if (favServ) {
             _favourite = [favServ copy];
@@ -59,13 +53,11 @@
             _favourite = [[MUFavouriteServer alloc] init];
         }
         
-        CGRect textFieldRect = CGRectMake(110.0, 10.0, 185.0, 30.0);
-        
-        _descriptionCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerDescription"];
+        _descriptionCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"MUFavouriteServerDescription"];
+        MUConfigureStandardCell(_descriptionCell);
         [_descriptionCell setSelectionStyle:UITableViewCellSelectionStyleNone];
-        [[_descriptionCell textLabel] setText:NSLocalizedString(@"Description", nil)];
-        _descriptionField = [[UITextField alloc] initWithFrame:textFieldRect];
-        [_descriptionField setTextColor:[MUColor selectedTextColor]];
+        _descriptionField = [[UITextField alloc] init];
+        [_descriptionField setTextColor:[UIColor labelColor]];
         [_descriptionField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [_descriptionField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_descriptionField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
@@ -77,15 +69,13 @@
         [_descriptionField setAutocapitalizationType:UITextAutocapitalizationTypeWords];
         [_descriptionField setText:[_favourite displayName]];
         [_descriptionField setClearButtonMode:UITextFieldViewModeWhileEditing];
-        [[_descriptionCell contentView] addSubview:_descriptionField];
+        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_descriptionCell title:NSLocalizedString(@"Description", nil) andTextField:_descriptionField];
 
-        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_descriptionCell andTextField:_descriptionField];
-
-        _addressCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerAddress"];
+        _addressCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"MUFavouriteServerAddress"];
+        MUConfigureStandardCell(_addressCell);
         [_addressCell setSelectionStyle:UITableViewCellSelectionStyleNone];
-        [[_addressCell textLabel] setText:NSLocalizedString(@"Address", nil)];
-        _addressField = [[UITextField alloc] initWithFrame:textFieldRect];
-        [_addressField setTextColor:[MUColor selectedTextColor]];
+        _addressField = [[UITextField alloc] init];
+        [_addressField setTextColor:[UIColor labelColor]];
         [_addressField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [_addressField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_addressField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
@@ -99,15 +89,13 @@
         [_addressField setKeyboardType:UIKeyboardTypeURL];
         [_addressField setText:[_favourite hostName]];
         [_addressField setClearButtonMode:UITextFieldViewModeWhileEditing];
-        [[_addressCell contentView] addSubview:_addressField];
+        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_addressCell title:NSLocalizedString(@"Address", nil) andTextField:_addressField];
 
-        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_addressCell andTextField:_addressField];
-
-        _portCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerPort"];
+        _portCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"MUFavouriteServerPort"];
+        MUConfigureStandardCell(_portCell);
         [_portCell setSelectionStyle:UITableViewCellSelectionStyleNone];
-        [[_portCell textLabel] setText:NSLocalizedString(@"Port", nil)];
-        _portField = [[UITextField alloc] initWithFrame:textFieldRect];
-        [_portField setTextColor:[MUColor selectedTextColor]];
+        _portField = [[UITextField alloc] init];
+        [_portField setTextColor:[UIColor labelColor]];
         [_portField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [_portField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_portField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
@@ -124,15 +112,13 @@
         else
             [_portField setText:@""];
         [_portField setClearButtonMode:UITextFieldViewModeWhileEditing];
-        [[_portCell contentView] addSubview:_portField];
+        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_portCell title:NSLocalizedString(@"Port", nil) andTextField:_portField];
 
-        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_portCell andTextField:_portField];
-
-        _usernameCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerUsername"];
+        _usernameCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"MUFavouriteServerUsername"];
+        MUConfigureStandardCell(_usernameCell);
         [_usernameCell setSelectionStyle:UITableViewCellSelectionStyleNone];
-        [[_usernameCell textLabel] setText:NSLocalizedString(@"Username", nil)];
-        _usernameField = [[UITextField alloc] initWithFrame:textFieldRect];
-        [_usernameField setTextColor:[MUColor selectedTextColor]];
+        _usernameField = [[UITextField alloc] init];
+        [_usernameField setTextColor:[UIColor labelColor]];
         [_usernameField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [_usernameField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_usernameField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
@@ -146,15 +132,13 @@
         [_usernameField setSecureTextEntry:NO];
         [_usernameField setText:[_favourite userName]];
         [_usernameField setClearButtonMode:UITextFieldViewModeWhileEditing];
-        [[_usernameCell contentView] addSubview:_usernameField];
+        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_usernameCell title:NSLocalizedString(@"Username", nil) andTextField:_usernameField];
 
-        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_usernameCell andTextField:_usernameField];
-
-        _passwordCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerPassword"];
+        _passwordCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"MUFavouriteServerPassword"];
+        MUConfigureStandardCell(_passwordCell);
         [_passwordCell setSelectionStyle:UITableViewCellSelectionStyleNone];
-        [[_passwordCell textLabel] setText:NSLocalizedString(@"Password", nil)];
-        _passwordField = [[UITextField alloc] initWithFrame:textFieldRect];
-        [_passwordField setTextColor:[MUColor selectedTextColor]];
+        _passwordField = [[UITextField alloc] init];
+        [_passwordField setTextColor:[UIColor labelColor]];
         [_passwordField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [_passwordField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_passwordField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
@@ -168,9 +152,7 @@
         [_passwordField setTextAlignment:NSTextAlignmentLeft];
         [_passwordField setText:[_favourite password]];
         [_passwordField setClearButtonMode:UITextFieldViewModeWhileEditing];
-        [[_passwordCell contentView] addSubview:_passwordField];
-
-        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_passwordCell andTextField:_passwordField];
+        [MUFavouriteServerEditViewController configureTableViewConstraintWithCell:_passwordCell title:NSLocalizedString(@"Password", nil) andTextField:_passwordField];
     }
     return self;
 }
@@ -179,13 +161,11 @@
     return [self initInEditMode:NO withContentOfFavouriteServer:nil];
 }
 
-- (BOOL) shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation {
-    // On iPad, we support all interface orientations.
+- (UIInterfaceOrientationMask) supportedInterfaceOrientations {
     if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
-        return YES;
+        return UIInterfaceOrientationMaskAll;
     }
-    
-    return toInterfaceOrientation == UIInterfaceOrientationPortrait;
+    return UIInterfaceOrientationMaskPortrait;
 }
 
 #pragma mark -
@@ -193,22 +173,16 @@
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    MUConfigureTable(self.tableView);
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
     
     self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 44;
     
-    if (@available(iOS 7, *)) {
+    {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-        self.tableView.separatorInset = UIEdgeInsetsZero;
-    } else {
-        self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     }
-
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWasShown:)
-                                                 name:UIKeyboardDidShowNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWillBeHidden:)
-                                                 name:UIKeyboardWillHideNotification object:nil];
 
     // View title
     if (!_editMode) {
@@ -288,8 +262,10 @@
     // Get rid of oureslves and call back to our target to tell it that
     // we're done.
     [[self navigationController] dismissViewControllerAnimated:YES completion:nil];
-    if ([_target respondsToSelector:_doneAction]) {
-        [_target performSelector:_doneAction withObject:self];
+    if (_doneAction != NULL && [_target respondsToSelector:_doneAction]) {
+        IMP implementation = [_target methodForSelector:_doneAction];
+        void (*invoke)(id, SEL, id) = (void *)implementation;
+        invoke(_target, _doneAction, self);
     }
 }
 
@@ -383,33 +359,9 @@
     }
 }
 
-- (void) keyboardWasShown:(NSNotification*)aNotification {
-    NSDictionary* info = [aNotification userInfo];
-    CGSize kbSize = [[info objectForKey:UIKeyboardFrameBeginUserInfoKey] CGRectValue].size;
-    
-    [UIView animateWithDuration:0.2f animations:^{
-        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, 0.0, kbSize.height, 0.0);
-        self.tableView.contentInset = contentInsets;
-        self.tableView.scrollIndicatorInsets = contentInsets;
-    } completion:^(BOOL finished) {
-        if (!finished)
-            return;
 
-        [self.tableView scrollToRowAtIndexPath:[self.tableView indexPathForCell:self->_activeCell]
-                              atScrollPosition:UITableViewScrollPositionBottom animated:YES];
-        
-    }];
-}
 
-- (void) keyboardWillBeHidden:(NSNotification*)aNotification {
-    [UIView animateWithDuration:0.2f animations:^{
-        UIEdgeInsets contentInsets = UIEdgeInsetsZero;
-        self.tableView.contentInset = contentInsets;
-        self.tableView.scrollIndicatorInsets = contentInsets;
-    } completion:^(BOOL finished) {
-        // ...
-    }];
-}
+
 
 
 @end

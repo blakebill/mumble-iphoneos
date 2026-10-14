@@ -8,22 +8,21 @@
 
 - (id) init {
     if ((self = [super init])) {
-        self.font = [UIFont boldSystemFontOfSize:18.0f];
-        self.textColor = [UIColor whiteColor];
-        if (@available(iOS 7, *)) {
-            // Don't use shadows on iOS 7 or greater.
-        } else {
-            self.shadowColor = [UIColor darkGrayColor];
-            self.shadowOffset = CGSizeMake(1.5f, 1.5f);
-        }
+        self.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+        self.textColor = [UIColor secondaryLabelColor];
         self.backgroundColor = [UIColor clearColor];
-        self.textAlignment = NSTextAlignmentCenter;
+        self.textAlignment = NSTextAlignmentNatural;
     }
     return self;
 }
 
 + (CGFloat) defaultHeaderHeight {
-    return 44.0f;
+    return 36.0f;
+}
+
+- (void) drawTextInRect:(CGRect)rect {
+    UIEdgeInsets insets = UIEdgeInsetsMake(14.0f, 20.0f, 4.0f, 20.0f);
+    [super drawTextInRect:UIEdgeInsetsInsetRect(rect, insets)];
 }
 
 + (MUTableViewHeaderLabel *) labelWithText:(NSString *)text {

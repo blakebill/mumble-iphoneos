@@ -3,26 +3,29 @@
 // license that can be found in the LICENSE file.
 
 #import "MUCertificateController.h"
-#import <MumbleKit/MKCertificate.h>
+#import "MLClient.h"
+
+NSNotificationName const MUCertificatesDidChangeNotification = @"MUCertificatesDidChangeNotification";
 
 @implementation MUCertificateController
 
 // Retrieve a certificate by its persistent reference.
 //
 // If the value stored in the keychain is of type SecIdentityRef, the
-// returned MKCertificate will include both the certificate and the
+// returned MLCertificate will include both the certificate and the
 // private key of the returned identity.
 //
 // If the value stored in the keychain is of type SecCertificateRef,
-// the returned MKCertificate will not include a private key.
-+ (MKCertificate *) certificateWithPersistentRef:(NSData *)persistentRef {
+// the returned MLCertificate will not include a private key.
++ (MLCertificate *) certificateWithPersistentRef:(NSData *)persistentRef {
+    if (!persistentRef.length) return nil;
     NSDictionary *query = [NSDictionary dictionaryWithObjectsAndKeys:
                            persistentRef,      kSecValuePersistentRef,
                            kCFBooleanTrue,     kSecReturnRef,
                            kSecMatchLimitOne,  kSecMatchLimit,
                            nil];
     CFTypeRef thing = NULL;
-    MKCertificate *cert = nil;
+    MLCertificate *cert = nil;
     if (SecItemCopyMatching((CFDictionaryRef)query, &thing) == noErr && thing != NULL) {
         CFTypeID receivedType = CFGetTypeID(thing);
         if (receivedType == SecIdentityGetTypeID()) {
@@ -39,22 +42,25 @@
                              kSecMatchLimitOne,  kSecMatchLimit,
                              nil];
                     if (SecItemCopyMatching((CFDictionaryRef)query, (CFTypeRef *)&pkeyData) == noErr) {
-                        cert = [MKCertificate certificateWithCertificate:secData privateKey:pkeyData];
+                        cert = [MLCertificate certificateWithCertificate:secData privateKey:pkeyData];
                         [pkeyData release];
                     }
                     CFRelease(secKey);
                 }
                 [secData release];
+                CFRelease(secCert);
             }
         } else if (receivedType == SecCertificateGetTypeID()) {
             SecCertificateRef secCert = (SecCertificateRef) thing;
             NSData *secData = (NSData *)SecCertificateCopyData(secCert);
-            cert = [MKCertificate certificateWithCertificate:secData privateKey:nil];
+            cert = [MLCertificate certificateWithCertificate:secData privateKey:nil];
             [secData release];
         } else {
+            CFRelease(thing);
             return nil;
         }
     }
+    if (thing) CFRelease(thing);
     return cert;
 }
 
@@ -82,7 +88,7 @@
 }
 
 // Returns the certificate set as the default or 'active' certificate.
-+ (MKCertificate *) defaultCertificate {
++ (MLCertificate *) defaultCertificate {
     NSData *persistentRef = [[NSUserDefaults standardUserDefaults] objectForKey:@"DefaultCertificate"];
     return [MUCertificateController certificateWithPersistentRef:persistentRef];
 }
@@ -90,6 +96,14 @@
 // Set the default certificate by its persistent ref.
 + (void) setDefaultCertificateByPersistentRef:(NSData *)persistentRef {
     [[NSUserDefaults standardUserDefaults] setObject:persistentRef forKey:@"DefaultCertificate"];
+}
+
++ (void)notifyCertificatesChanged {
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self notifyCertificatesChanged]; });
+        return;
+    }
+    [NSNotificationCenter.defaultCenter postNotificationName:MUCertificatesDidChangeNotification object:nil];
 }
 
 // Returns an array of the persistent refs of all SecIdentityRefs

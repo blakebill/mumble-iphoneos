@@ -1,3 +1,4 @@
+#import "MUInterface.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9,14 +10,34 @@
 #import "MUImage.h"
 #import "MUBackgroundView.h"
 
-#import <MumbleKit/MKCertificate.h>
+#import "MLClient.h"
+
+static UIViewController *MUFrontmostViewController(void) {
+    UIWindow *window = nil;
+    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) {
+            continue;
+        }
+        for (UIWindow *candidate in ((UIWindowScene *)scene).windows) {
+            if (candidate.isKeyWindow) {
+                window = candidate;
+                break;
+            }
+        }
+    }
+    UIViewController *controller = window.rootViewController;
+    while (controller.presentedViewController != nil) {
+        controller = controller.presentedViewController;
+    }
+    return controller;
+}
 
 static void ShowAlertDialog(NSString *title, NSString *msg) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSString *ok = NSLocalizedString(@"OK", nil);
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:title message:msg delegate:nil cancelButtonTitle:ok otherButtonTitles:nil];
-        [alert show];
-        [alert release];
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:ok style:UIAlertActionStyleCancel handler:nil]];
+        [MUFrontmostViewController() presentViewController:alert animated:YES completion:nil];
     });
 }
 
@@ -37,19 +58,12 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 #pragma mark -
 #pragma mark Initialization
 
-+ (void) configureTableViewConstraintWithCell:(UITableViewCell *)cell andTextField:(UITextField *)textField {
-    [textField setTranslatesAutoresizingMaskIntoConstraints:NO];
-
-    NSLayoutConstraint *top = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeTop multiplier:1 constant:8];
-    NSLayoutConstraint *bottom = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeBottom relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeBottom multiplier:1 constant:-8];
-    NSLayoutConstraint *left = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeLeft relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeLeft multiplier:1 constant:110];
-    NSLayoutConstraint *right = [NSLayoutConstraint constraintWithItem:textField attribute:NSLayoutAttributeRight relatedBy:NSLayoutRelationEqual toItem:[cell contentView] attribute:NSLayoutAttributeRight multiplier:1 constant:0];
-
-    [NSLayoutConstraint activateConstraints:@[top, bottom, left, right]];
+ + (void)configureTableViewConstraintWithCell:(UITableViewCell *)cell andTextField:(UITextField *)field {
+    MUConfigureFormCell(cell, cell.textLabel.text, field);
 }
 
 - (id) init {
-    if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
         self.preferredContentSize = CGSizeMake(320, 480);
         
         NSString *name = NSLocalizedString(@"Name", nil);
@@ -60,10 +74,11 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         CGRect textFieldRect = CGRectMake(110.0, 10.0, 185.0, 30.0);
         
         _nameCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerDescription"];
+        MUConfigureStandardCell(_nameCell);
         [_nameCell setSelectionStyle:UITableViewCellSelectionStyleNone];
         [[_nameCell textLabel] setText:name];
         _nameField = [[UITextField alloc] initWithFrame:textFieldRect];
-        [_nameField setTextColor:[MUColor selectedTextColor]];
+        [_nameField setTextColor:[UIColor labelColor]];
         [_nameField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [_nameField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_nameField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
@@ -80,10 +95,11 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         [MUCertificateCreationView configureTableViewConstraintWithCell:_nameCell andTextField:_nameField];
 
         _emailCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerDescription"];
+        MUConfigureStandardCell(_emailCell);
         [_emailCell setSelectionStyle:UITableViewCellSelectionStyleNone];
         [[_emailCell textLabel] setText:email];
         _emailField = [[UITextField alloc] initWithFrame:textFieldRect];
-        [_emailField setTextColor:[MUColor selectedTextColor]];
+        [_emailField setTextColor:[UIColor labelColor]];
         [_emailField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [_emailField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_emailField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
@@ -92,9 +108,10 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         [_emailField setAdjustsFontSizeToFitWidth:NO];
         [_emailField setTextAlignment:NSTextAlignmentLeft];
         [_emailField setPlaceholder:optional];
-        [_emailField setAutocapitalizationType:UITextAutocapitalizationTypeWords];
+        [_emailField setAutocapitalizationType:UITextAutocapitalizationTypeNone];
+        _emailField.textContentType = UITextContentTypeEmailAddress;
         [_emailField setKeyboardType:UIKeyboardTypeEmailAddress];
-        [_emailField setText:_fullName];
+        [_emailField setText:_emailAddress];
         [_emailField setClearButtonMode:UITextFieldViewModeWhileEditing];
         [[_emailCell contentView] addSubview:_emailField];
 
@@ -109,6 +126,8 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    MUConfigureTable(self.tableView);
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
 
     NSString *newCert = NSLocalizedString(@"New Certificate",
                                           @"Title of MUCertificateCreationView (shown when creating a self-signed certificate)");
@@ -116,11 +135,8 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     
     self.tableView.backgroundView = [MUBackgroundView backgroundView];
     
-    if (@available(iOS 7, *)) {
+    {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-        self.tableView.separatorInset = UIEdgeInsetsZero;
-    } else {
-        self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     }
     
     NSString *create = NSLocalizedString(@"Create", @"'Create' text for certificate creation");
@@ -133,13 +149,6 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     UIBarButtonItem *createButton = [[UIBarButtonItem alloc] initWithTitle:create style:UIBarButtonItemStyleDone target:self action:@selector(createClicked:)];
     [[self navigationItem] setRightBarButtonItem:createButton];
     [createButton release];
-
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWasShown:)
-                                                 name:UIKeyboardDidShowNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWillBeHidden:)
-                                                 name:UIKeyboardWillHideNotification object:nil];
 }
 
 - (void) viewWillDisappear:(BOOL)animated {
@@ -213,32 +222,9 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     }
 }
 
-- (void) keyboardWasShown:(NSNotification*)aNotification {
-    NSDictionary* info = [aNotification userInfo];
-    CGSize kbSize = [[info objectForKey:UIKeyboardFrameBeginUserInfoKey] CGRectValue].size;
-    
-    [UIView animateWithDuration:0.2f animations:^{
-        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, 0.0, kbSize.height, 0.0);
-        self.tableView.contentInset = contentInsets;
-        self.tableView.scrollIndicatorInsets = contentInsets;
-    } completion:^(BOOL finished) {
-        if (!finished)
-            return;
-        [self.tableView scrollToRowAtIndexPath:[self.tableView indexPathForCell:_activeCell]
-                              atScrollPosition:UITableViewScrollPositionBottom animated:YES];
-        
-    }];
-}
 
-- (void) keyboardWillBeHidden:(NSNotification*)aNotification {
-    [UIView animateWithDuration:0.2f animations:^{
-        UIEdgeInsets contentInsets = UIEdgeInsetsZero;
-        self.tableView.contentInset = contentInsets;
-        self.tableView.scrollIndicatorInsets = contentInsets;
-    } completion:^(BOOL finished) {
-        // ...
-    }];
-}
+
+
 
 
 #pragma mark -
@@ -271,17 +257,23 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         OSStatus err = noErr;
+        BOOL saved = NO;
+        NSString *failureTitle = nil, *failureMessage = nil;
         
         // Generate a certificate for this identity.
-        MKCertificate *cert = [MKCertificate selfSignedCertificateWithName:name email:email];
-        NSData *pkcs12 = [cert exportPKCS12WithPassword:@""];
+        MLCertificate *cert = [MLCertificate selfSignedCertificateWithName:name email:email];
+        // A transient nonempty password avoids Security.framework's empty-password
+        // PKCS#12 compatibility issue. It is used only for this in-memory transfer.
+        NSString *transferPassword = [[NSUUID UUID] UUIDString];
+        NSData *pkcs12 = [cert exportPKCS12WithPassword:transferPassword];
         if (pkcs12 == nil) {
             NSString *title = NSLocalizedString(@"Unable to generate certificate", @"Certificate generation error title");
             NSString *msg = NSLocalizedString(@"Mumble was unable to generate a certificate for your identity.", 
                                               @"Certificate generation error body text");
-            ShowAlertDialog(title, msg);
+            failureTitle = title;
+            failureMessage = msg;
         } else {
-            NSDictionary *dict = [NSDictionary dictionaryWithObjectsAndKeys:@"", kSecImportExportPassphrase, nil];
+            NSDictionary *dict = [NSDictionary dictionaryWithObjectsAndKeys:transferPassword, kSecImportExportPassphrase, nil];
             NSArray *items = nil;
             err = SecPKCS12Import((CFDataRef)pkcs12, (CFDictionaryRef)dict, (CFArrayRef *)&items);
             if (err == errSecSuccess && [items count] > 0) {
@@ -299,25 +291,52 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
                     if ([MUCertificateController defaultCertificate] == nil) {
                         [MUCertificateController setDefaultCertificateByPersistentRef:data];
                     }
+                    saved = YES;
 
                 // This happens when a certificate with a duplicate subject name is added.
-                } else if (err == noErr && data == nil) {
+                } else if (err == errSecDuplicateItem || (err == noErr && data == nil)) {
                     NSString *title = NSLocalizedString(@"Unable to add identity",
                                                         @"Error title shown when adding a certificate fails because of a subject name clash.");
                     NSString *msg = NSLocalizedString(@"A certificate with the same name already exist.",
                                                       @"Error body when adding a certificate fails because of a subject name clash.");
-                    ShowAlertDialog(title, msg);
+                    failureTitle = title;
+                    failureMessage = msg;
+                } else {
+                    failureTitle = NSLocalizedString(@"Unable to add identity", nil);
+                    failureMessage = [(NSString *)SecCopyErrorMessageString(err, NULL) autorelease] ?: NSLocalizedString(@"Mumble was unable to save the certificate.", nil);
                 }
+                [data release];
             } else {
                 NSString *title = NSLocalizedString(@"Import Error", nil);
                 NSString *msg = NSLocalizedString(@"Mumble was unable to import the generated certificate.",
                                                   @"Generic certificate import error message body.");
-                ShowAlertDialog(title, msg);
+                failureTitle = title;
+                failureMessage = msg;
             }
+            [items release];
         }
         
         dispatch_async(dispatch_get_main_queue(), ^{
-            [[self navigationController] dismissViewControllerAnimated:YES completion:nil];
+            // Storage changes still reach the list if the sheet was dismissed
+            // while the background task was finishing.
+            if (saved) [MUCertificateController notifyCertificatesChanged];
+            void (^finishUI)(void) = ^{
+                if (saved) {
+                    [[self navigationController] dismissViewControllerAnimated:YES completion:nil];
+                } else if (self.navigationController.presentingViewController) {
+                    // Keep the form available for correction/retry.
+                    [[self navigationController] popToViewController:self animated:NO];
+                    ShowAlertDialog(failureTitle ?: NSLocalizedString(@"Import Error", nil), failureMessage ?: NSLocalizedString(@"Mumble was unable to save the certificate.", nil));
+                }
+            };
+            id<UIViewControllerTransitionCoordinator> transition = self.navigationController.transitionCoordinator;
+            if (transition) {
+                [transition animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+                    dispatch_async(dispatch_get_main_queue(), finishUI);
+                }];
+            } else {
+                finishUI();
+            }
         });
     });    
 }

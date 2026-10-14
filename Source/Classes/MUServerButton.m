@@ -3,15 +3,15 @@
 // license that can be found in the LICENSE file.
 
 #import "MUServerButton.h"
-#import <MumbleKit/MKServerPinger.h>
+#import "MLClient.h"
 
-@interface MUServerButton () <MKServerPingerDelegate> {
+@interface MUServerButton () <MLServerPingerDelegate> {
     NSString        *_displayname;
     NSString        *_hostname;
     NSString        *_port;
     NSString        *_username;
 
-    MKServerPinger  *_pinger;
+    MLServerPinger  *_pinger;
     NSUInteger       _pingMs;
     NSUInteger       _userCount;
     NSUInteger       _maxUserCount;
@@ -42,7 +42,7 @@
 
     if ([hostName length] > 0) {
         _hostname = [hostName copy];
-        _pinger = [[MKServerPinger alloc] initWithHostname:_hostname port:_port];
+        _pinger = [[MLServerPinger alloc] initWithHostname:_hostname port:_port];
         [_pinger setDelegate:self];
     } else {
         _hostname = NSLocalizedString(@"(No Server)", nil);
@@ -66,7 +66,7 @@
 
     _pinger = nil;
     if ([_hostname length] > 0) {
-        _pinger = [[MKServerPinger alloc] initWithHostname:_hostname port:_port];
+        _pinger = [[MLServerPinger alloc] initWithHostname:_hostname port:_port];
         [_pinger setDelegate:self];
     } else {
         _hostname = NSLocalizedString(@"(No Server)", nil);
@@ -75,7 +75,7 @@
     [self setNeedsDisplay];
 }
 
-- (void) serverPingerResult:(MKServerPingerResult *)result {
+- (void) serverPingerResult:(MLServerPingerResult *)result {
     _pingMs = (NSUInteger)(result->ping * 1000.0f);
     _userCount = (NSUInteger)(result->cur_users);
     _maxUserCount = (NSUInteger)(result->max_users);

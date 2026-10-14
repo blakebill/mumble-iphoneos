@@ -7,8 +7,7 @@
 @implementation MUColor
 
 + (UIColor *) selectedTextColor {
-    // #5d5d5d
-    return [UIColor colorWithRed:0x5d/255.0f green:0x5d/255.0f blue:0x5d/255.0f alpha:1.0f];
+    return [UIColor secondaryLabelColor];
 }
 
 + (UIColor *) goodPingColor {
@@ -27,7 +26,7 @@
 }
 
 + (UIColor *) userCountColor {
-    return [UIColor darkGrayColor];
+    return [UIColor systemBlueColor];
 }
 
 + (UIColor *) verifiedCertificateChainColor {
@@ -35,7 +34,7 @@
 }
 
 + (UIColor *) backgroundViewiOS7Color {
-    return [UIColor colorWithRed:0x1C/255.0f green:0x1C/255.0f blue:0x1C/255.0f alpha:1.0f];
+    return [UIColor systemGroupedBackgroundColor];
 }
 
 @end

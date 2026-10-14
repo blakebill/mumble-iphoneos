@@ -1,3 +1,4 @@
+#import "MUInterface.h"
 // Copyright 2012 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -14,7 +15,7 @@
 @implementation MURemoteControlPreferencesViewController
 
 - (id) init {
-    if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
     }
     return self;
 }
@@ -26,14 +27,11 @@
     
     self.tableView.backgroundView = [MUBackgroundView backgroundView];
     
-    if (@available(iOS 7, *)) {
+    {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-        self.tableView.separatorInset = UIEdgeInsetsZero;
-    } else {
-        self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     }
 
-    self.tableView.scrollEnabled = NO;
+    self.tableView.scrollEnabled = YES;
 }
 
 #pragma mark - Table view data source
@@ -54,15 +52,15 @@
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
     if (cell == nil) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:CellIdentifier];
+        MUConfigureStandardCell(cell);
     }
     
     if (indexPath.section == 0) {
         if (indexPath.row == 0) {
-            cell.textLabel.text = @"Enable";
-            UISwitch *enableSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
+            cell.textLabel.text = NSLocalizedString(@"Enable", nil);
+            UISwitch *enableSwitch = [[UISwitch alloc] initWithFrame:CGRectMake(0, 0, 51, 31)];
             [enableSwitch addTarget:self action:@selector(enableSwitchChanged:) forControlEvents:UIControlEventValueChanged];
             enableSwitch.on = [[MURemoteControlServer sharedRemoteControlServer] isRunning];
-            enableSwitch.onTintColor = [UIColor blackColor];
             cell.accessoryView = enableSwitch;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         }

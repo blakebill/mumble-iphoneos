@@ -1,6 +1,6 @@
-// Copyright 2012 The 'Mumble for iOS' Developers. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// Use of this source code is governed by the BSD-style license in LICENSE.
 
-@interface MUWelcomeScreenPad : UIViewController
+#import "MUWelcomeScreenPhone.h"
+
+@interface MUWelcomeScreenPad : MUWelcomeScreenPhone
 @end

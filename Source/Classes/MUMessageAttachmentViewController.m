@@ -1,3 +1,4 @@
+#import "MUInterface.h"
 // Copyright 2009-2012 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17,7 +18,7 @@
 @implementation MUMessageAttachmentViewController
 
 - (id) initWithImages:(NSArray *)images andLinks:(NSArray *)links {
-    if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
         _images = images;
         _links = links;
     }
@@ -28,16 +29,15 @@
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    MUConfigureTable(self.tableView);
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
 
     self.navigationItem.title = NSLocalizedString(@"Attachments", nil);
     
     self.tableView.backgroundView = [MUBackgroundView backgroundView];
     
-    if (@available(iOS 7, *)) {
+    {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-        self.tableView.separatorInset = UIEdgeInsetsZero;
-    } else {
-        self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     }
 }
 
@@ -63,18 +63,12 @@
     return 0;
 }
 
-- (UIView *) tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+- (NSString *) tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     BOOL hasImages = [_images count] > 0;
     if (hasImages && section == 0) {
-        return [MUTableViewHeaderLabel labelWithText:NSLocalizedString(@"Images", nil)];
-    } else {
-        return [MUTableViewHeaderLabel labelWithText:NSLocalizedString(@"Links", nil)];
+        return NSLocalizedString(@"Images", nil);
     }
-    return nil;
-}
-
-- (CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return [MUTableViewHeaderLabel defaultHeaderHeight];
+    return NSLocalizedString(@"Links", nil);
 }
 
 - (UITableViewCell *) tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -82,9 +76,10 @@
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
     if (cell == nil) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:CellIdentifier];
+        MUConfigureStandardCell(cell);
     }
     
-    cell.selectionStyle = UITableViewCellSelectionStyleGray;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
     BOOL hasImages = [_images count] > 0;
     if (hasImages && [indexPath section] == 0) {

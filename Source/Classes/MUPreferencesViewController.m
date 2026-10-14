@@ -1,3 +1,4 @@
+#import "MUInterface.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -14,12 +15,11 @@
 #import "MUColor.h"
 #import "MUImage.h"
 #import "MUBackgroundView.h"
+#import "MUAboutViewController.h"
 
-#import <MumbleKit/MKCertificate.h>
+#import "MLClient.h"
 
-@interface MUPreferencesViewController () {
-    UITextField *_activeTextField;
-}
+@interface MUPreferencesViewController ()
 - (void) audioVolumeChanged:(UISlider *)volumeSlider;
 - (void) forceTCPChanged:(UISwitch *)tcpSwitch;
 @end
@@ -30,16 +30,10 @@
 #pragma mark Initialization
 
 - (id) init {
-    if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
         self.preferredContentSize = CGSizeMake(320, 480);
     }
     return self;
-}
-
-- (void) dealloc {
-    [[NSUserDefaults standardUserDefaults] synchronize];
-    MUApplicationDelegate *delegate = [[UIApplication sharedApplication] delegate];
-    [delegate reloadPreferences];
 }
 
 #pragma mark -
@@ -47,28 +41,14 @@
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    MUConfigureTable(self.tableView);
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
 
-    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
-        self.navigationController.navigationBar.barStyle = UIBarStyleBlackOpaque;
-        [self.navigationController.navigationBar setBackgroundImage:[MUImage clearColorImage] forBarMetrics:UIBarMetricsDefault];
-        self.navigationController.navigationBar.translucent = YES;
-    }
-    
     self.tableView.backgroundView = [MUBackgroundView backgroundView];
     
-    if (@available(iOS 7, *)) {
+    {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-        self.tableView.separatorInset = UIEdgeInsetsZero;
-    } else {
-        self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     }
-
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWasShown:)
-                                                 name:UIKeyboardDidShowNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWillBeHidden:)
-                                                 name:UIKeyboardWillHideNotification object:nil];
 
     self.title = NSLocalizedString(@"Preferences", nil);
     [self.tableView reloadData];
@@ -76,14 +56,15 @@
 
 - (void) viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    // The Settings tab stays alive, so apply changes when leaving rather than on deallocation.
+    [(MUApplicationDelegate *)UIApplication.sharedApplication.delegate reloadPreferences];
 }
 
 #pragma mark -
 #pragma mark Table view data source
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 2;
+    return self.showsAppInformation ? 3 : 2;
 }
 
 - (NSInteger) tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -99,7 +80,7 @@
 #endif
     }
 
-    return 0;
+    return section == 2 && self.showsAppInformation ? 1 : 0;
 }
 
 // Customize the appearance of table view cells.
@@ -108,29 +89,55 @@
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
     if (cell == nil) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
+        MUConfigureStandardCell(cell);
     }
-    cell.selectionStyle = UITableViewCellSelectionStyleGray;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
     cell.accessoryType = UITableViewCellAccessoryNone;
+    cell.accessoryView = nil;
+    cell.contentConfiguration = nil;
+    cell.textLabel.text = nil;
     
     // Audio section
     if ([indexPath section] == 0) {
-        // Volume
         if ([indexPath row] == 0) {
-            UISlider *volSlider = [[UISlider alloc] init];
-            [volSlider setMinimumTrackTintColor:[UIColor blackColor]];
-            [volSlider setMaximumValue:1.0f];
-            [volSlider setMinimumValue:0.0f];
-            [volSlider setValue:[[NSUserDefaults standardUserDefaults] floatForKey:@"AudioOutputVolume"]];
-            [[cell textLabel] setText:NSLocalizedString(@"Volume", nil)];
-            [cell setAccessoryView:volSlider];
-            [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
-            [volSlider addTarget:self action:@selector(audioVolumeChanged:) forControlEvents:UIControlEventValueChanged];
+            UITableViewCell *sliderCell = [tableView dequeueReusableCellWithIdentifier:@"VolumeSliderCell"];
+            UISlider *volSlider = nil;
+            if (sliderCell == nil) {
+                sliderCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"VolumeSliderCell"];
+                MUConfigureStandardCell(sliderCell);
+                sliderCell.selectionStyle = UITableViewCellSelectionStyleNone;
+                volSlider = [[UISlider alloc] init];
+                volSlider.translatesAutoresizingMaskIntoConstraints = NO;
+                volSlider.tag = 1001;
+                volSlider.minimumValue = 0.0f;
+                volSlider.maximumValue = 1.0f;
+                volSlider.accessibilityLabel = NSLocalizedString(@"Playback Volume", nil);
+                UIImageSymbolConfiguration *quietSpeaker = [UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightMedium];
+                UIImageSymbolConfiguration *loudSpeaker = [UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightMedium];
+                volSlider.minimumValueImage = [[UIImage systemImageNamed:@"speaker.fill" withConfiguration:quietSpeaker] imageWithTintColor:[UIColor secondaryLabelColor] renderingMode:UIImageRenderingModeAlwaysOriginal];
+                volSlider.maximumValueImage = [[UIImage systemImageNamed:@"speaker.wave.3.fill" withConfiguration:loudSpeaker] imageWithTintColor:[UIColor secondaryLabelColor] renderingMode:UIImageRenderingModeAlwaysOriginal];
+                [volSlider addTarget:self action:@selector(audioVolumeChanged:) forControlEvents:UIControlEventValueChanged];
+                [sliderCell.contentView addSubview:volSlider];
+                UILayoutGuide *margins = sliderCell.contentView.layoutMarginsGuide;
+                [NSLayoutConstraint activateConstraints:@[
+                    [sliderCell.contentView.heightAnchor constraintGreaterThanOrEqualToConstant:44.0],
+                    [volSlider.leadingAnchor constraintEqualToAnchor:margins.leadingAnchor],
+                    [volSlider.trailingAnchor constraintEqualToAnchor:margins.trailingAnchor],
+                    [volSlider.centerYAnchor constraintEqualToAnchor:sliderCell.contentView.centerYAnchor],
+                    [volSlider.heightAnchor constraintGreaterThanOrEqualToConstant:44],
+                ]];
+            } else {
+                volSlider = (UISlider *)[sliderCell.contentView viewWithTag:1001];
+            }
+            volSlider.value = [[NSUserDefaults standardUserDefaults] floatForKey:@"AudioOutputVolume"];
+            return sliderCell;
         }
         // Transmit method
         if ([indexPath row] == 1) {
             UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"AudioTransmitCell"];
             if (cell == nil)
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"AudioTransmitCell"];
+                MUConfigureStandardCell(cell);
             cell.textLabel.text = NSLocalizedString(@"Transmission", nil);
             NSString *xmit = [[NSUserDefaults standardUserDefaults] stringForKey:@"AudioTransmitMethod"];
             if ([xmit isEqualToString:@"vad"]) {
@@ -142,7 +149,7 @@
             }
             cell.detailTextLabel.textColor = [MUColor selectedTextColor];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-             cell.selectionStyle = UITableViewCellSelectionStyleGray;
+             cell.selectionStyle = UITableViewCellSelectionStyleDefault;
             return cell;
         } else if ([indexPath row] == 2) {
             cell.textLabel.text = NSLocalizedString(@"Advanced", nil);
@@ -153,28 +160,29 @@
     // Network
     } else if ([indexPath section] == 1) {
         if ([indexPath row] == 0) {
-            UISwitch *tcpSwitch = [[UISwitch alloc] init];
+            UISwitch *tcpSwitch = [[UISwitch alloc] initWithFrame:CGRectMake(0, 0, 51, 31)];
             [tcpSwitch setOn:[[NSUserDefaults standardUserDefaults] boolForKey:@"NetworkForceTCP"]];
             [[cell textLabel] setText:NSLocalizedString(@"Force TCP", nil)];
             [cell setAccessoryView:tcpSwitch];
             [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
-            [tcpSwitch setOnTintColor:[UIColor blackColor]];
             [tcpSwitch addTarget:self action:@selector(forceTCPChanged:) forControlEvents:UIControlEventValueChanged];
         } else if ([indexPath row] == 1) {
             UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"PrefCertificateCell"];
             if (cell == nil)
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"PrefCertificateCell"];
-            MKCertificate *cert = [MUCertificateController defaultCertificate];
+                MUConfigureStandardCell(cell);
+            MLCertificate *cert = [MUCertificateController defaultCertificate];
             cell.textLabel.text = NSLocalizedString(@"Certificate", nil);
             cell.detailTextLabel.text = cert ? [cert subjectName] : NSLocalizedString(@"None", @"None (No certificate chosen)");
             cell.detailTextLabel.textColor = [MUColor selectedTextColor];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-            cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            cell.selectionStyle = UITableViewCellSelectionStyleDefault;
             return cell;
         } else if ([indexPath row] == 2) {
             UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"RemoteControlCell"];
             if (cell == nil)
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"RemoteControlCell"];
+                MUConfigureStandardCell(cell);
             cell.textLabel.text = NSLocalizedString(@"Remote Control", nil);
             BOOL isOn = [[MURemoteControlServer sharedRemoteControlServer] isRunning];
             if (isOn) {
@@ -184,32 +192,36 @@
             }
             cell.detailTextLabel.textColor = [MUColor selectedTextColor];
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-            cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            cell.selectionStyle = UITableViewCellSelectionStyleDefault;
             return cell;
         }
     }
 
+    if (indexPath.section == 2 && self.showsAppInformation) {
+        UIListContentConfiguration *content = [UIListContentConfiguration cellConfiguration];
+        content.text = NSLocalizedString(@"About", nil);
+        content.image = [UIImage systemImageNamed:@"info.circle"];
+        content.imageProperties.tintColor = UIColor.labelColor;
+        cell.contentConfiguration = content;
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    }
     return cell;
 }
 
-- (UIView *) tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+- (NSString *) tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     if (section == 0) {
-        return [MUTableViewHeaderLabel labelWithText:NSLocalizedString(@"Audio", nil)];
+        return NSLocalizedString(@"Audio", nil);
     } else if (section == 1) {
-        return [MUTableViewHeaderLabel labelWithText:NSLocalizedString(@"Network", nil)];
+        return NSLocalizedString(@"Network", nil);
     }
-
     return nil;
-}
-
-- (CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return [MUTableViewHeaderLabel defaultHeaderHeight];
 }
 
 #pragma mark -
 #pragma mark Table view delegate
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == 0) { // Audio
         if (indexPath.row == 1) { // Transmission
             MUAudioTransmissionPreferencesViewController *audioXmit = [[MUAudioTransmissionPreferencesViewController alloc] init];
@@ -227,6 +239,8 @@
             MURemoteControlPreferencesViewController *remoteControlPref = [[MURemoteControlPreferencesViewController alloc] init];
             [self.navigationController pushViewController:remoteControlPref animated:YES];
         }
+    } else if (indexPath.section == 2 && self.showsAppInformation) {
+        [self.navigationController pushViewController:[MUAboutViewController new] animated:YES];
     }
 }
 

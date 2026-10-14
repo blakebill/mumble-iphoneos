@@ -3,11 +3,12 @@
 // license that can be found in the LICENSE file.
 
 #import "MUAudioMixerDebugViewController.h"
-#import <MumbleKit/MKAudio.h>
+#import "MLClient.h"
 
 @interface MUAudioMixerDebugViewController () {
     NSDictionary  *_mixerInfo;
     NSTimer       *_timer;
+    NSDateFormatter *_dateFormatter;
 }
 @end
 
@@ -21,21 +22,28 @@
 }
 
 - (void) viewWillAppear:(BOOL)animated {
-    [[self navigationItem] setTitle:@"Mixer Debug"];
+    [super viewWillAppear:animated];
+    [[self navigationItem] setTitle:NSLocalizedString(@"Mixer Debug", nil)];
     
     UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(doneDebugging:)];
     [[self navigationItem] setRightBarButtonItem:doneButton];
     
-    _timer = [NSTimer scheduledTimerWithTimeInterval:0.001 target:self selector:@selector(updateMixerInfo:) userInfo:nil repeats:YES];
+    [_timer invalidate];
+    __weak MUAudioMixerDebugViewController *weakSelf = self;
+    _timer = [NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer) { [weakSelf updateMixerInfo:timer]; }];
+    _timer.tolerance = .2;
     [self updateMixerInfo:self];
 }
 
 - (void) viewWillDisappear:(BOOL)animated {
-    [_timer invalidate];
+    [super viewWillDisappear:animated];
+    [_timer invalidate]; _timer = nil;
 }
 
+- (void)dealloc { [_timer invalidate]; }
+
 - (void) updateMixerInfo:(id)sender {
-    _mixerInfo = [[MKAudio sharedAudio] copyAudioOutputMixerDebugInfo];
+    _mixerInfo = [[MLAudio sharedAudio] copyAudioOutputMixerDebugInfo];
     [[self tableView] reloadData];
 }
 
@@ -50,7 +58,7 @@
         return 1;
     } else if (section == 1) { // Sources
         return [[_mixerInfo objectForKey:@"sources"] count];
-    } else if (section == 1) { // Removed
+    } else if (section == 2) { // Removed
         return [[_mixerInfo objectForKey:@"removed"] count];
     }
     
@@ -66,11 +74,10 @@
     
     if (indexPath.section == 0) { // Meta
         if (indexPath.row == 0) { // Last Update
-            NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
-            [fmt setDateFormat:@"HH:mm:ss:SSS"];
+            if (!_dateFormatter) { _dateFormatter = [NSDateFormatter new]; _dateFormatter.dateFormat = @"HH:mm:ss:SSS"; }
             NSDate *date = [_mixerInfo objectForKey:@"last-update"];
-            cell.textLabel.text = @"Last Updated";
-            cell.detailTextLabel.text = [fmt stringFromDate:date];
+            cell.textLabel.text = NSLocalizedString(@"Last Updated", nil);
+            cell.detailTextLabel.text = [_dateFormatter stringFromDate:date];
         }
     }
     

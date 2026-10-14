@@ -1,114 +1,47 @@
-// Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
+// Use of this source code is governed by the BSD-style license in LICENSE.
 #import "MUNotificationController.h"
 
-@interface MUNotificationController () {
-    UIView          *_notificationView;
-    NSMutableArray  *_notificationQueue;
-    BOOL            _running;
-    CGRect          _keyboardFrame;
+@implementation MUNotificationController {
+    NSMutableArray<NSString *> *_notificationQueue;
+    BOOL _running;
 }
-- (void) showNext;
-- (void) hideCurrent;
-@end
-
-@implementation MUNotificationController
-
-+ (MUNotificationController *) sharedController {
-    static MUNotificationController *nc;
-    static dispatch_once_t token;
-    dispatch_once(&token, ^{
-        nc = [[MUNotificationController alloc] init];
-    });
-    return nc;
++ (MUNotificationController *)sharedController {
+    static MUNotificationController *controller; static dispatch_once_t once;
+    dispatch_once(&once, ^{ controller = [self new]; }); return controller;
 }
-
-- (id) init {
+- (id)init {
     if ((self = [super init])) {
-        _notificationQueue = [[NSMutableArray alloc] init];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardDidShow:) name:UIKeyboardDidShowNotification object:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardDidHide:) name:UIKeyboardDidHideNotification object:nil];
+        _notificationQueue = [NSMutableArray array];
+        [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(becameActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
     }
     return self;
 }
-
-- (void) dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+- (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
+- (void)becameActive:(NSNotification *)notification { if (!_running) [self showNext]; }
+- (void)addNotification:(NSString *)text {
+    if (!NSThread.isMainThread) { dispatch_async(dispatch_get_main_queue(), ^{ [self addNotification:text]; }); return; }
+    if (text.length && _notificationQueue.count < 10) [_notificationQueue addObject:[text copy]];
+    if (!_running) [self showNext];
 }
-
-- (void) keyboardDidShow:(NSNotification *)notification {
-    NSDictionary *userInfo = [notification userInfo];
-    NSValue *val = [userInfo valueForKey:UIKeyboardFrameEndUserInfoKey];
-    [val getValue:&_keyboardFrame];
-}
-
-- (void) keyboardDidHide:(NSNotification *)notification {
-    _keyboardFrame = CGRectZero;
-}
-
-- (void) addNotification:(NSString *)text {
-    if ([_notificationQueue count] < 10)
-        [_notificationQueue addObject:[text copy]];
-    if (!_running) {
-        [self showNext];
-    }
-}
-
-- (void) showNext {
+- (void)showNext {
+    if (!_notificationQueue.count || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) { _running = NO; return; }
     _running = YES;
-
-    UIScreen *screen = [UIScreen mainScreen];
-    CGRect bounds = screen.bounds;
-    
-    CGFloat width = ceilf(bounds.size.width - 50.0f);
-    CGFloat height = 50.0f;
-    
-    CGRect frame = CGRectMake(25.0f, ceilf((bounds.size.height - _keyboardFrame.size.height)/2) - 25.0f, width, height);
-    UIView *container = [[UIView alloc] initWithFrame:frame];
-    container.alpha = 0.0f;
-    container.userInteractionEnabled = NO;
-    
-    UIView *bg = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, height)];
-    bg.layer.cornerRadius = 8.0f;
-    bg.backgroundColor = [UIColor blackColor];
-    bg.alpha = 0.8f;
-    [container addSubview:bg];
-
-    UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, width, height)];
-    lbl.font = [UIFont systemFontOfSize:16.0f];
-    NSString *notificationText = [_notificationQueue objectAtIndex:0];
-    lbl.text = notificationText;
+    UIViewController *presenter = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class] || scene.activationState != UISceneActivationStateForegroundActive) continue;
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) if (window.isKeyWindow) presenter = window.rootViewController;
+    }
+    while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+    if (!presenter || [presenter isKindOfClass:UIAlertController.class] || presenter.isBeingPresented || presenter.isBeingDismissed || presenter.transitionCoordinator) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 2), dispatch_get_main_queue(), ^{ [self showNext]; });
+        return;
+    }
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"Server Notice", nil) message:_notificationQueue.firstObject preferredStyle:UIAlertControllerStyleAlert];
     [_notificationQueue removeObjectAtIndex:0];
-    lbl.textColor = [UIColor whiteColor];
-    lbl.backgroundColor = [UIColor clearColor];
-    lbl.textAlignment = NSTextAlignmentCenter;
-    [container addSubview:lbl];
-    
-    [[[UIApplication sharedApplication] keyWindow] addSubview:container];
-
-    self->_notificationView = container;
-    [UIView animateWithDuration:0.1f animations:^{
-        self->_notificationView.alpha = 1.0f;
-    } completion:^(BOOL completed) {
-        NSTimer *timer = [NSTimer timerWithTimeInterval:0.3f target:self selector:@selector(hideCurrent) userInfo:nil repeats:NO];
-        [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
-    }];
+    [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"OK", nil) style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+        self->_running = NO;
+        dispatch_async(dispatch_get_main_queue(), ^{ [self showNext]; });
+    }]];
+    [presenter presentViewController:alert animated:YES completion:nil];
 }
-
-- (void) hideCurrent {
-    [UIView animateWithDuration:0.1f animations:^{
-        self->_notificationView.alpha = 0.0f;
-    } completion:^(BOOL completed) {
-        [self->_notificationView removeFromSuperview];
-        self->_notificationView = nil;
-        if ([self->_notificationQueue count] > 0) {
-            [self performSelectorOnMainThread:@selector(showNext) withObject:nil waitUntilDone:NO];
-        } else {
-            self->_running = NO;
-        }
-    }];
-}
-
 @end

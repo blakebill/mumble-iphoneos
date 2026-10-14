@@ -1,3 +1,5 @@
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import "MUInterface.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9,15 +11,35 @@
 #import "MUImage.h"
 #import "MUBackgroundView.h"
 
+static UIViewController *MUFrontmostViewController(void) {
+    UIWindow *window = nil;
+    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) {
+            continue;
+        }
+        for (UIWindow *candidate in ((UIWindowScene *)scene).windows) {
+            if (candidate.isKeyWindow) {
+                window = candidate;
+                break;
+            }
+        }
+    }
+    UIViewController *controller = window.rootViewController;
+    while (controller.presentedViewController != nil) {
+        controller = controller.presentedViewController;
+    }
+    return controller;
+}
+
 static void ShowAlertDialog(NSString *title, NSString *msg) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:title message:msg delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil];
-        [alert show];
-        [alert release];
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+        [MUFrontmostViewController() presentViewController:alert animated:YES completion:nil];
     });
 }
 
-@interface MUCertificateDiskImportViewController () {
+@interface MUCertificateDiskImportViewController () <UIDocumentPickerDelegate> {
     BOOL             _showHelp;
     NSMutableArray   *_diskCertificates;
     NSIndexPath      *_attemptIndexPath;
@@ -34,7 +56,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 - (id) init {
     self.preferredContentSize = CGSizeMake(320, 480);
     
-    UITableViewStyle style = UITableViewStyleGrouped;
+    UITableViewStyle style = UITableViewStyleInsetGrouped;
     NSArray *documentDirs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSError *err = nil;
     NSArray *dirContents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:[documentDirs objectAtIndex:0] error:&err];
@@ -56,7 +78,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     }
 
     if ((self = [super initWithStyle:style])) {
-        if (style == UITableViewStyleGrouped)
+        if (style == UITableViewStyleInsetGrouped)
             _showHelp = YES;
         _diskCertificates = [diskCerts retain];
     }
@@ -68,28 +90,72 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    MUConfigureTable(self.tableView);
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
 
-    if (self.tableView.style == UITableViewStyleGrouped) {
+    if (self.tableView.style == UITableViewStyleInsetGrouped) {
         self.tableView.backgroundView = [MUBackgroundView backgroundView];
     } else {
-        if (@available(iOS 7, *)) {
+        {
             self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-            self.tableView.separatorInset = UIEdgeInsetsZero;
         }
     }
 
-    NSString *iTunesImport = NSLocalizedString(@"iTunes Import", @"Import a certificate from iTunes action sheet button.");
+    NSString *iTunesImport = NSLocalizedString(@"Import Certificates", nil);
     [[self navigationItem] setTitle:iTunesImport];
 
     UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(doneClicked:)];
     [[self navigationItem] setLeftBarButtonItem:doneButton];
     [doneButton release];
 
-    if (!_showHelp) {
-        UIBarButtonItem *actionButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(actionClicked:)];
-        [[self navigationItem] setRightBarButtonItem:actionButton];
-        [actionButton release];
+    [self updateDocumentActions];
+}
+
+- (void)updateDocumentActions {
+    UIBarButtonItem *add = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd target:self action:@selector(importFromFiles:)];
+    if (_diskCertificates.count) {
+        UIBarButtonItem *actions = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(actionClicked:)];
+        self.navigationItem.rightBarButtonItems = @[add, actions];
+        [actions release];
+        self.contentUnavailableConfiguration = nil;
+    } else {
+        self.navigationItem.rightBarButtonItems = @[add];
+        UIContentUnavailableConfiguration *empty = [UIContentUnavailableConfiguration emptyConfiguration];
+        empty.image = [UIImage systemImageNamed:@"doc.badge.plus"];
+        empty.text = NSLocalizedString(@"Import Certificates", nil);
+        empty.secondaryText = NSLocalizedString(@"Choose a certificate file (.p12 or .pfx).", nil);
+        __unsafe_unretained MUCertificateDiskImportViewController *controller = self;
+        empty.buttonProperties.primaryAction = [UIAction actionWithTitle:NSLocalizedString(@"Choose File", nil) image:nil identifier:nil handler:^(UIAction *action) { [controller importFromFiles:nil]; }];
+        self.contentUnavailableConfiguration = empty;
     }
+    [add release];
+}
+- (void)importFromFiles:(id)sender {
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypePKCS12] asCopy:YES];
+    picker.delegate = self;
+    picker.shouldShowFileExtensions = YES;
+    [self presentViewController:picker animated:YES completion:nil];
+    [picker release];
+}
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *source = urls.firstObject;
+    if (!source) return;
+    BOOL scoped = [source startAccessingSecurityScopedResource];
+    NSURL *folder = [NSURL fileURLWithPath:NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject isDirectory:YES];
+    NSString *name = source.lastPathComponent;
+    NSURL *destination = [folder URLByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:destination.path]) {
+        name = [NSString stringWithFormat:@"%@-%@", NSUUID.UUID.UUIDString, name];
+        destination = [folder URLByAppendingPathComponent:name];
+    }
+    NSError *error = nil;
+    BOOL copied = [NSFileManager.defaultManager copyItemAtURL:source toURL:destination error:&error];
+    if (scoped) [source stopAccessingSecurityScopedResource];
+    if (!copied) { ShowAlertDialog(NSLocalizedString(@"Import Failed", nil), error.localizedDescription); return; }
+    [_diskCertificates addObject:name];
+    _showHelp = NO;
+    [self updateDocumentActions];
+    [self.tableView reloadData];
 }
 
 #pragma mark - Table view data source
@@ -107,18 +173,19 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
     if (cell == nil) {
         cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier] autorelease];
+        MUConfigureStandardCell(cell);
     }
 
-    [[cell imageView] setImage:[UIImage imageNamed:@"certificatecell"]];
+    [[cell imageView] setImage:[MUImage symbolNamed:@"checkmark.seal" pointSize:24]];
     [[cell textLabel] setText:[_diskCertificates objectAtIndex:[indexPath row]]];
     [cell setAccessoryType:UITableViewCellAccessoryNone];
-    [cell setSelectionStyle:UITableViewCellSelectionStyleGray];
+    [cell setSelectionStyle:UITableViewCellSelectionStyleDefault];
 
     return cell;
 }
 
 - (CGFloat) tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    return 85.0f;
+    return UITableViewAutomaticDimension;
 }
 
 #pragma mark - Table view delegate
@@ -130,27 +197,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     [self tryImportCertificateWithPassword:nil];
 }
 
-- (UIView *) tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    if (_showHelp) {
-        NSString *help = NSLocalizedString(@"To import your own certificate into\n"
-                                           @"Mumble, please transfer them to your\n"
-                                           @"device using iTunes File Transfer.",
-                                           @"Help text for iTunes File Transfer (iTunes Import)");
-        MUTableViewHeaderLabel *lbl = [MUTableViewHeaderLabel labelWithText:help];
-        lbl.font = [UIFont systemFontOfSize:16.0f];
-        lbl.lineBreakMode = NSLineBreakByWordWrapping;
-        lbl.numberOfLines = 0;
-        return lbl;
-    }
-    return nil;
-}
-
-- (CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    if (_showHelp) {
-        return 80.0f;
-    }
-    return 0.0f;
-}
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section { return nil; }
 
 #pragma mark - Import logic
 
@@ -160,15 +207,16 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     NSString *pkcs12File = [[documentDirs objectAtIndex:0] stringByAppendingFormat:@"/%@", fileName];
     NSData *pkcs12Data = [NSData dataWithContentsOfFile:pkcs12File];
 
-    NSArray *chain = [MKCertificate certificatesWithPKCS12:pkcs12Data password:password];
+    NSArray *chain = [MLCertificate certificatesWithPKCS12:pkcs12Data password:password];
     if ([chain count] == 0) {
         [self showPasswordDialog];
         [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
         return;
     }
     
-    MKCertificate *leaf = [chain objectAtIndex:0];
-    NSData *transformedPkcs12Data = [leaf exportPKCS12WithPassword:@""];
+    MLCertificate *leaf = [chain objectAtIndex:0];
+    NSString *transferPassword = [[NSUUID UUID] UUIDString];
+    NSData *transformedPkcs12Data = [leaf exportPKCS12WithPassword:transferPassword];
     if (transformedPkcs12Data == nil) {
         ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
                         NSLocalizedString(@"Mumble was unable to export the specified certificate.",
@@ -177,14 +225,14 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         return;
     }
     
-    NSDictionary *dict = [NSDictionary dictionaryWithObjectsAndKeys:@"", kSecImportExportPassphrase, nil];
+    NSDictionary *dict = [NSDictionary dictionaryWithObjectsAndKeys:transferPassword, kSecImportExportPassphrase, nil];
     NSArray *items = nil;
     OSStatus err = SecPKCS12Import((CFDataRef)transformedPkcs12Data, (CFDictionaryRef)dict, (CFArrayRef *)&items);
 
     if (err == errSecSuccess && [items count] > 0) {
         // Add all elements except the leaf certificate to the keychain
         for (int i = 1; i < [chain count]; i++) {
-            MKCertificate *cert = [chain objectAtIndex:i];
+            MLCertificate *cert = [chain objectAtIndex:i];
             SecCertificateRef secCert = SecCertificateCreateWithData(NULL, (CFDataRef)[cert certificate]);
             if (secCert == NULL) {
                 ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
@@ -221,6 +269,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
             if ([MUCertificateController defaultCertificate] == nil) {
                 [MUCertificateController setDefaultCertificateByPersistentRef:data];
             }
+            [MUCertificateController notifyCertificatesChanged];
             
             // Remove the file from disk
             NSError *errObj = nil;
@@ -231,6 +280,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
             [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
             [_diskCertificates removeObjectAtIndex:[_attemptIndexPath row]];
             [[self tableView] deleteRowsAtIndexPaths:[NSArray arrayWithObject:_attemptIndexPath] withRowAnimation:UITableViewRowAnimationFade];
+            [self updateDocumentActions];
             return;
         } else if (err == errSecDuplicateItem || (err == noErr && data == nil)) {
             ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
@@ -315,6 +365,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
             [_diskCertificates removeObjectIdenticalTo:fn];
         }
     }
+    [self updateDocumentActions];
     [self.tableView reloadData];
     [diskCerts release];
 }
@@ -355,6 +406,9 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     UIAlertController *sheetCtrl = [UIAlertController alertControllerWithTitle:title
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
+    sheetCtrl.popoverPresentationController.sourceView = self.view;
+    sheetCtrl.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+    sheetCtrl.popoverPresentationController.permittedArrowDirections = 0;
     
     [sheetCtrl addAction: [UIAlertAction actionWithTitle:NSLocalizedString(@"Cancel", nil)
                                                    style:UIAlertActionStyleCancel

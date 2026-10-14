@@ -1,3 +1,4 @@
+#import "MUInterface.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -17,7 +18,7 @@
 @implementation MUPublicServerListController
 
 - (id) init {
-    if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
+    if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
         _serverList = [[MUPublicServerList alloc] init];
     }
     return self;
@@ -30,35 +31,43 @@
     
     self.tableView.backgroundView = [MUBackgroundView backgroundView];
     
-    if (@available(iOS 7, *)) {
+    {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-        self.tableView.separatorInset = UIEdgeInsetsZero;
-    } else {
-        self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     }
 
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(serverListDidUpdate:) name:MUPublicServerListDidUpdateNotification object:nil];
+
     if (![_serverList isParsed]) {
-        UIActivityIndicatorView *activityIndicatorView = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
+        UIActivityIndicatorView *activityIndicatorView = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
         UIBarButtonItem *barActivityIndicator = [[UIBarButtonItem alloc] initWithCustomView:activityIndicatorView];
         self.navigationItem.rightBarButtonItem = barActivityIndicator;
         [activityIndicatorView startAnimating];
     }
 }
 
+- (void) viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    if ([self isMovingFromParentViewController] || [self isBeingDismissed]) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:MUPublicServerListDidUpdateNotification object:nil];
+    }
+}
+
+- (void) reloadServerList {
+    if (![_serverList isParsed]) {
+        [_serverList parse];
+    }
+    self.navigationItem.rightBarButtonItem = nil;
+    [self.tableView reloadData];
+}
+
+- (void) serverListDidUpdate:(NSNotification *)notification {
+    [_serverList invalidate];
+    [self reloadServerList];
+}
+
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:YES];
-
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        if ([self->_serverList isParsed]) {
-            self.navigationItem.rightBarButtonItem = nil;
-            return;
-        }
-        [self->_serverList parse];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.navigationItem.rightBarButtonItem = nil;
-            [self.tableView reloadData];
-        });
-    });
+    [self reloadServerList];
 }
 
 #pragma mark -
@@ -68,12 +77,8 @@
     return [_serverList numberOfContinents];
 }
 
-- (UIView *) tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    return [MUTableViewHeaderLabel labelWithText:[_serverList continentNameAtIndex:section]];
-}
-
-- (CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return [MUTableViewHeaderLabel defaultHeaderHeight];
+- (NSString *) tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    return [_serverList continentNameAtIndex:section];
 }
 
 
@@ -82,13 +87,14 @@
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    return 50.0;
+    return UITableViewAutomaticDimension;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"countryItem"];
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"countryItem"];
+        MUConfigureStandardCell(cell);
     }
 
     [cell setAccessoryType:UITableViewCellAccessoryDisclosureIndicator];
@@ -96,7 +102,7 @@
     cell.textLabel.text = [countryInfo objectForKey:@"name"];
     NSInteger numServers = [[countryInfo objectForKey:@"servers"] count];
     cell.detailTextLabel.text = [NSString stringWithFormat:@"%li %@", (long int)numServers, numServers > 1 ? @"servers" : @"server"];
-    cell.selectionStyle = UITableViewCellSelectionStyleGray;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
     return cell;
 }
