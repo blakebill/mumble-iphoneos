@@ -7,7 +7,7 @@
 @import WebKit.WKWebView;
 
 @interface MULegalViewController () {
-    IBOutlet WKWebView *_webView;
+    WKWebView *_webView;
 }
 @end
 

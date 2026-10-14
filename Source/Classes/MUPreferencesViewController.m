@@ -8,13 +8,8 @@
 #import "MUCertificatePreferencesViewController.h"
 #import "MUAudioTransmissionPreferencesViewController.h"
 #import "MUAdvancedAudioPreferencesViewController.h"
-#import "MURemoteControlPreferencesViewController.h"
 #import "MUCertificateController.h"
-#import "MUTableViewHeaderLabel.h"
-#import "MURemoteControlServer.h"
-#import "MUColor.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 #import "MUAboutViewController.h"
 
 #import "MLClient.h"
@@ -44,7 +39,7 @@
     MUConfigureTable(self.tableView);
     self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
 
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
@@ -73,11 +68,7 @@
         return 3;
     // Network
     } else if (section == 1) {
-#ifdef ENABLE_REMOTE_CONTROL
-        return 3;
-#else
         return 2;
-#endif
     }
 
     return section == 2 && self.showsAppInformation ? 1 : 0;
@@ -147,7 +138,7 @@
             } else if ([xmit isEqualToString:@"continuous"]) {
                 cell.detailTextLabel.text = NSLocalizedString(@"Continuous", @"Continuous transmission mode");
             }
-            cell.detailTextLabel.textColor = [MUColor selectedTextColor];
+            cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
              cell.selectionStyle = UITableViewCellSelectionStyleDefault;
             return cell;
@@ -174,23 +165,7 @@
             MLCertificate *cert = [MUCertificateController defaultCertificate];
             cell.textLabel.text = NSLocalizedString(@"Certificate", nil);
             cell.detailTextLabel.text = cert ? [cert subjectName] : NSLocalizedString(@"None", @"None (No certificate chosen)");
-            cell.detailTextLabel.textColor = [MUColor selectedTextColor];
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-            cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-            return cell;
-        } else if ([indexPath row] == 2) {
-            UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"RemoteControlCell"];
-            if (cell == nil)
-                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"RemoteControlCell"];
-                MUConfigureStandardCell(cell);
-            cell.textLabel.text = NSLocalizedString(@"Remote Control", nil);
-            BOOL isOn = [[MURemoteControlServer sharedRemoteControlServer] isRunning];
-            if (isOn) {
-                cell.detailTextLabel.text = NSLocalizedString(@"On", nil);
-            } else {
-                cell.detailTextLabel.text = NSLocalizedString(@"Off", nil);
-            }
-            cell.detailTextLabel.textColor = [MUColor selectedTextColor];
+            cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
             cell.selectionStyle = UITableViewCellSelectionStyleDefault;
             return cell;
@@ -234,10 +209,6 @@
         if ([indexPath row] == 1) { // Certificates
             MUCertificatePreferencesViewController *certPref = [[MUCertificatePreferencesViewController alloc] init];
             [self.navigationController pushViewController:certPref animated:YES];
-        }
-        if ([indexPath row] == 2) { // Remote Control
-            MURemoteControlPreferencesViewController *remoteControlPref = [[MURemoteControlPreferencesViewController alloc] init];
-            [self.navigationController pushViewController:remoteControlPref animated:YES];
         }
     } else if (indexPath.section == 2 && self.showsAppInformation) {
         [self.navigationController pushViewController:[MUAboutViewController new] animated:YES];

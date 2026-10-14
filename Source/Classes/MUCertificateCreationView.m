@@ -6,9 +6,7 @@
 #import "MUCertificateCreationView.h"
 #import "MUCertificateCreationProgressView.h"
 #import "MUCertificateController.h"
-#import "MUColor.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 
 #import "MLClient.h"
 
@@ -49,7 +47,6 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     UITableViewCell  *_emailCell;
     UITextField      *_emailField;
     UITableViewCell  *_activeCell;
-    UITextField      *_activeTextField;
 }
 @end
 
@@ -65,14 +62,14 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 - (id) init {
     if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
         self.preferredContentSize = CGSizeMake(320, 480);
-        
+
         NSString *name = NSLocalizedString(@"Name", nil);
         NSString *defaultName = NSLocalizedString(@"Mumble User", nil);
         NSString *email = NSLocalizedString(@"Email", nil);
         NSString *optional = NSLocalizedString(@"Optional", nil);
-        
+
         CGRect textFieldRect = CGRectMake(110.0, 10.0, 185.0, 30.0);
-        
+
         _nameCell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"MUFavouriteServerDescription"];
         MUConfigureStandardCell(_nameCell);
         [_nameCell setSelectionStyle:UITableViewCellSelectionStyleNone];
@@ -80,7 +77,6 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         _nameField = [[UITextField alloc] initWithFrame:textFieldRect];
         [_nameField setTextColor:[UIColor labelColor]];
         [_nameField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
-        [_nameField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_nameField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
         [_nameField addTarget:self action:@selector(textFieldDidEndOnExit:) forControlEvents:UIControlEventEditingDidEndOnExit];
         [_nameField setReturnKeyType:UIReturnKeyNext];
@@ -101,7 +97,6 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         _emailField = [[UITextField alloc] initWithFrame:textFieldRect];
         [_emailField setTextColor:[UIColor labelColor]];
         [_emailField addTarget:self action:@selector(textFieldBeganEditing:) forControlEvents:UIControlEventEditingDidBegin];
-        [_emailField addTarget:self action:@selector(textFieldEndedEditing:) forControlEvents:UIControlEventEditingDidEnd];
         [_emailField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingChanged];
         [_emailField addTarget:self action:@selector(textFieldDidEndOnExit:) forControlEvents:UIControlEventEditingDidEndOnExit];
         [_emailField setReturnKeyType:UIReturnKeyDefault];
@@ -120,10 +115,6 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     return self;
 }
 
-- (void) dealloc {
-    [super dealloc];
-}
-
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     MUConfigureTable(self.tableView);
@@ -132,23 +123,22 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     NSString *newCert = NSLocalizedString(@"New Certificate",
                                           @"Title of MUCertificateCreationView (shown when creating a self-signed certificate)");
     [self setTitle:newCert];
-    
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
-    
+
+    self.tableView.backgroundView = nil;
+
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
     }
-    
+
     NSString *create = NSLocalizedString(@"Create", @"'Create' text for certificate creation");
     NSString *cancel = NSLocalizedString(@"Cancel", nil);
 
     UIBarButtonItem *cancelButton = [[UIBarButtonItem alloc] initWithTitle:cancel style:UIBarButtonItemStylePlain target:self action:@selector(cancelClicked:)];
     [[self navigationItem] setLeftBarButtonItem:cancelButton];
-    [cancelButton release];
 
     UIBarButtonItem *createButton = [[UIBarButtonItem alloc] initWithTitle:create style:UIBarButtonItemStyleDone target:self action:@selector(createClicked:)];
     [[self navigationItem] setRightBarButtonItem:createButton];
-    [createButton release];
+
 }
 
 - (void) viewWillDisappear:(BOOL)animated {
@@ -163,11 +153,9 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     return 1;
 }
 
-
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return 2;
 }
-
 
 // Customize the appearance of table view cells.
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -184,7 +172,6 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 #pragma mark Text field handling
 
 - (void) textFieldBeganEditing:(UITextField *)sender {
-    _activeTextField = sender;
     if (sender == _nameField) {
         _activeCell = _nameCell;
     } else if (sender == _emailField) {
@@ -192,16 +179,12 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     }
 }
 
-- (void) textFieldEndedEditing:(UITextField *)sender {
-    _activeTextField = nil;
-}
-
 - (void) textFieldDidChange:(UITextField *)sender {
     if (sender == _nameField) {
-        [_fullName release];
+
         _fullName = [[sender text] copy];
     } else if (sender == _emailField) {
-        [_emailAddress release];
+
         _emailAddress = [[sender text] copy];
     }
 }
@@ -209,11 +192,9 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 - (void) textFieldDidEndOnExit:(UITextField *)sender {
     if (sender == _nameField) {
         [_emailField becomeFirstResponder];
-        _activeTextField = _emailField;
         _activeCell = _emailCell;
     } else if (sender == _emailField) {
         [_emailField resignFirstResponder];
-        _activeTextField = nil;
         _activeCell = nil;
     }
     if (_activeCell) {
@@ -221,11 +202,6 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
                               atScrollPosition:UITableViewScrollPositionBottom animated:YES];
     }
 }
-
-
-
-
-
 
 #pragma mark -
 #pragma mark Target/actions
@@ -236,13 +212,13 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 
 - (void) createClicked:(id)sender {
     NSString *name, *email;
-    
+
     if (_fullName == nil || [_fullName length] == 0) {
         name = @"Mumble User";
     } else {
         name = _fullName;
     }
-    
+
     if (_emailAddress == nil || [_emailAddress length] == 0) {
         email = nil;
     } else {
@@ -253,13 +229,12 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
 
     MUCertificateCreationProgressView *progress = [[MUCertificateCreationProgressView alloc] initWithName:name email:email];
     [[self navigationController] pushViewController:progress animated:YES];
-    [progress release];
-    
+
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         OSStatus err = noErr;
         BOOL saved = NO;
         NSString *failureTitle = nil, *failureMessage = nil;
-        
+
         // Generate a certificate for this identity.
         MLCertificate *cert = [MLCertificate selfSignedCertificateWithName:name email:email];
         // A transient nonempty password avoids Security.framework's empty-password
@@ -268,23 +243,25 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         NSData *pkcs12 = [cert exportPKCS12WithPassword:transferPassword];
         if (pkcs12 == nil) {
             NSString *title = NSLocalizedString(@"Unable to generate certificate", @"Certificate generation error title");
-            NSString *msg = NSLocalizedString(@"Mumble was unable to generate a certificate for your identity.", 
+            NSString *msg = NSLocalizedString(@"Mumble was unable to generate a certificate for your identity.",
                                               @"Certificate generation error body text");
             failureTitle = title;
             failureMessage = msg;
         } else {
-            NSDictionary *dict = [NSDictionary dictionaryWithObjectsAndKeys:transferPassword, kSecImportExportPassphrase, nil];
-            NSArray *items = nil;
-            err = SecPKCS12Import((CFDataRef)pkcs12, (CFDictionaryRef)dict, (CFArrayRef *)&items);
+            NSDictionary *dict = [NSDictionary dictionaryWithObjectsAndKeys:transferPassword, (__bridge id)kSecImportExportPassphrase, nil];
+            CFArrayRef importedItems = NULL;
+            err = SecPKCS12Import((__bridge CFDataRef)pkcs12, (__bridge CFDictionaryRef)dict, &importedItems);
+            NSArray *items = CFBridgingRelease(importedItems);
             if (err == errSecSuccess && [items count] > 0) {
                 NSDictionary *pkcsDict = [items objectAtIndex:0];
                 // Get the SecIdentityRef
-                SecIdentityRef identity = (SecIdentityRef)[pkcsDict objectForKey:(id)kSecImportItemIdentity];
+                id identity = [pkcsDict objectForKey:(__bridge id)kSecImportItemIdentity];
                 NSDictionary *op = [NSDictionary dictionaryWithObjectsAndKeys:
-                                    (id)identity, kSecValueRef,
-                                    kCFBooleanTrue, kSecReturnPersistentRef, nil];
-                NSData *data = nil;
-                err = SecItemAdd((CFDictionaryRef)op, (CFTypeRef *)&data);
+                                    identity, (__bridge id)kSecValueRef,
+                                    (__bridge id)kCFBooleanTrue, (__bridge id)kSecReturnPersistentRef, nil];
+                CFTypeRef persistentResult = NULL;
+                err = SecItemAdd((__bridge CFDictionaryRef)op, &persistentResult);
+                NSData *data = CFBridgingRelease(persistentResult);
                 if (err == noErr && data != nil) {
                     // Success!
                     // Now, check if there's already a default certificate set.
@@ -303,9 +280,9 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
                     failureMessage = msg;
                 } else {
                     failureTitle = NSLocalizedString(@"Unable to add identity", nil);
-                    failureMessage = [(NSString *)SecCopyErrorMessageString(err, NULL) autorelease] ?: NSLocalizedString(@"Mumble was unable to save the certificate.", nil);
+                    failureMessage = CFBridgingRelease(SecCopyErrorMessageString(err, NULL)) ?: NSLocalizedString(@"Mumble was unable to save the certificate.", nil);
                 }
-                [data release];
+
             } else {
                 NSString *title = NSLocalizedString(@"Import Error", nil);
                 NSString *msg = NSLocalizedString(@"Mumble was unable to import the generated certificate.",
@@ -313,9 +290,9 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
                 failureTitle = title;
                 failureMessage = msg;
             }
-            [items release];
+
         }
-        
+
         dispatch_async(dispatch_get_main_queue(), ^{
             // Storage changes still reach the list if the sheet was dismissed
             // while the background task was finishing.
@@ -338,7 +315,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
                 finishUI();
             }
         });
-    });    
+    });
 }
 
 @end

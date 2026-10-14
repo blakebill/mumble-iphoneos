@@ -131,7 +131,6 @@
 "Kicked by %@ for reason: \"%@\"" = "被 %@ 踢出，原因：“%@”";
 "LAN Servers" = "局域網伺服器";
 "LAN discovery unavailable" = "局域網發現不可用";
-"Last Updated" = "上次更新";
 "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay." = "語音通話建議關閉此選項。低延遲編碼會犧牲語音優化，以縮短編解碼器延遲。";
 "Leave this server?" = "離開此伺服器？";
 "Legal" = "法律信息";
@@ -155,7 +154,6 @@
 "Microphone muted" = "麥克風已靜音";
 "Missing certificate" = "缺少憑證";
 "Missing certificate for user" = "使用者缺少憑證";
-"Mixer Debug" = "混音器調試";
 "Mumble Server" = "Mumble 伺服器";
 "Mumble User" = "Mumble 使用者";
 "Mumble continuously transmits all recorded audio." = "Mumble 會持續發送所有錄制的音訊。";
@@ -214,7 +212,6 @@
 "Quality Presets" = "音質預設";
 "Ready: %@" = "已就緒：%@";
 "Reconnect" = "重新連接";
-"Remote Control" = "遠程控制";
 "Remove All" = "全部移除";
 "Remove Importable Certificates" = "移除可匯入的憑證";
 "Remove Photo" = "移除照片";
@@ -301,4 +298,3 @@
 "Your certificate" = "你的憑證";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS 負責回聲消除、降噪和麥克風音量處理。你可以在連接前選擇麥克風模式。可用模式取決於設備和音訊路由。";
 "—" = "—";
-"Enable" = "啟用";

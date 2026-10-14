@@ -4,7 +4,6 @@
 
 #import "MUAudioTransmissionPreferencesViewController.h"
 #import "MUVoiceActivitySetupViewController.h"
-#import "MUBackgroundView.h"
 #import "MUApplicationDelegate.h"
 #import "MUInterface.h"
 
@@ -39,7 +38,7 @@
 
     self.title = NSLocalizedString(@"Transmission", nil);
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
     self.tableView.scrollEnabled = YES;
 }

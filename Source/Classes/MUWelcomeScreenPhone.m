@@ -8,7 +8,6 @@
 #import "MUConnectionController.h"
 #import "MUDatabase.h"
 #import "MUFavouriteServer.h"
-#import "MUBackgroundView.h"
 
 static const NSUInteger MUHomeServerPreviewLimit = 5;
 
@@ -40,7 +39,7 @@ static const NSUInteger MUHomeServerPreviewLimit = 5;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 56;
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(appEnteredBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];

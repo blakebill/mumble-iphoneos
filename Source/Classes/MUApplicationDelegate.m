@@ -12,7 +12,6 @@
 #import "MUPublicServerList.h"
 #import "MUConnectionController.h"
 #import "MUNotificationController.h"
-#import "MURemoteControlServer.h"
 #import "MLClient.h"
 #import <UserNotifications/UserNotifications.h>
 
@@ -80,14 +79,7 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
                                                                 @"MumbleUser",                     @"DefaultUserName",
                                                         nil]];
 
-    // Disable mixer debugging for all builds.
-    [[NSUserDefaults standardUserDefaults] setObject:[NSNumber numberWithBool:NO] forKey:@"AudioMixerDebug"];
     
-#ifdef ENABLE_REMOTE_CONTROL
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"RemoteControlServerEnabled"]) {
-        [[MURemoteControlServer sharedRemoteControlServer] start];
-    }
-#endif
     
     return YES;
 }
@@ -255,7 +247,6 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
     }
     
     settings.opusForceCELTMode = [defaults boolForKey:@"AudioOpusLowDelay"];
-    settings.audioMixerDebug = [defaults boolForKey:@"AudioMixerDebug"];
     
     MLAudio *audio = [MLAudio sharedAudio];
     MLAudioSettings previous, current;
@@ -278,8 +269,7 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
         previous.enableSideTone != current.enableSideTone ||
         previous.sidetoneVolume != current.sidetoneVolume ||
         previous.preferReceiverOverSpeaker != current.preferReceiverOverSpeaker ||
-        previous.opusForceCELTMode != current.opusForceCELTMode ||
-        previous.audioMixerDebug != current.audioMixerDebug;
+        previous.opusForceCELTMode != current.opusForceCELTMode;
     // Restart only when the engine is already up. Starting Voice Processing
     // during launch blocks the process before the first screen appears.
     if (changed && [audio isRunning]) {
@@ -335,10 +325,6 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
         NSLog(@"MumbleApplicationDelegate: Not connected to a server. Stopping MLAudio.");
         [[MLAudio sharedAudio] stop];
         
-#ifdef ENABLE_REMOTE_CONTROL
-        // Also terminate the remote control server.
-        [[MURemoteControlServer sharedRemoteControlServer] stop];
-#endif
     }
 }
 
@@ -361,11 +347,6 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
         // Engine.isRunning does not prove the microphone tap is delivering PCM.
         [audio resumeIfNeeded];
         
-#if ENABLE_REMOTE_CONTROL
-        // Re-start the remote control server.
-        [[MURemoteControlServer sharedRemoteControlServer] stop];
-        [[MURemoteControlServer sharedRemoteControlServer] start];
-#endif
     } else {
         // A visible calibration meter also owns a foreground capture preview.
         [MLAudio.sharedAudio resumeIfNeeded];

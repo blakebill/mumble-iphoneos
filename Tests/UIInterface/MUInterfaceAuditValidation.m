@@ -4,6 +4,7 @@
 #import "MLClient.h"
 #import "MUCertificateCell.h"
 #import "MUCountryServerListController.h"
+#import "MUPublicServerList.h"
 #import "MUFavouriteServerEditViewController.h"
 #import "MUCertificateCreationProgressView.h"
 #import "MUMessageRecipientViewController.h"
@@ -156,6 +157,14 @@ static void SetupAndCertificateChecks(UIWindow *window) {
   Check([list.tableView numberOfRowsInSection:0]==baseline+1,@"Generated certificate is absent until the list is reopened");
   Check([[MUCertificateController defaultCertificate].subjectName isEqual:generated],@"Generated identity is not available as the default certificate");
   [createdRefs addObject:[defaults dataForKey:@"DefaultCertificate"]];Save(window,@"certificate-list-after-generation.png");
+  __weak MUCertificateViewController *retiredViewer=nil;
+  @autoreleasepool {
+   MUCertificateViewController *viewer=[[MUCertificateViewController alloc]initWithPersistentRef:createdRefs.firstObject];
+   retiredViewer=viewer;[viewer loadViewIfNeeded];[viewer viewWillAppear:NO];
+   Check([viewer.tableView numberOfRowsInSection:0]>0,@"ARC certificate chain loses the generated Keychain identity");
+  }
+  Wait(.05);Check(retiredViewer==nil,@"Certificate details retains its controller after the caller releases it");
+
   MUCertificateDiskImportViewController *files=[MUCertificateDiskImportViewController new];[list presentViewController:[[UINavigationController alloc]initWithRootViewController:files] animated:NO completion:nil];Wait(.2);
   MLCertificate *fixture=[MLCertificate selfSignedCertificateWithName:imported email:nil];NSData *pkcs12=[fixture exportPKCS12WithPassword:@"audit-import-password"];
   source=[NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:[NSUUID.UUID.UUIDString stringByAppendingPathExtension:@"p12"]]];Check([pkcs12 writeToURL:source atomically:YES],@"Unable to prepare isolated import fixture");
@@ -219,13 +228,13 @@ static void FormChecks(UIWindow *window) {
 @implementation AuditCertificateTable
 - (NSInteger)tableView:(UITableView *)table numberOfRowsInSection:(NSInteger)section { return 1; }
 - (UITableViewCell *)tableView:(UITableView *)table cellForRowAtIndexPath:(NSIndexPath *)path {
- MUCertificateCell *cell=[MUCertificateCell loadFromNib];[cell setSubjectName:@"A long certificate identity name that must remain readable"];[cell setEmail:@"identity@example.com"];[cell setIssuerText:@"Mumble Certificate Authority"];[cell setExpiryText:@"Expires on October 13, 2027"];[cell setIsCurrentCertificate:YES];[cell setIsExpired:YES];[cell setIsExpired:NO];return cell;
+ MUCertificateCell *cell=[MUCertificateCell certificateCell];[cell setSubjectName:@"A long certificate identity name that must remain readable"];[cell setEmail:@"identity@example.com"];[cell setIssuerText:@"Mumble Certificate Authority"];[cell setExpiryText:@"Expires on October 13, 2027"];[cell setIsCurrentCertificate:YES];[cell setIsExpired:YES];[cell setIsExpired:NO];return cell;
 }
 @end
 static void NativeChecks(UIWindow *window) {
  AuditCertificateTable *cert=[[AuditCertificateTable alloc]initWithStyle:UITableViewStyleInsetGrouped];cert.tableView.rowHeight=UITableViewAutomaticDimension;cert.tableView.estimatedRowHeight=100;Show(window,cert);Save(window,@"native-certificate-default.png");cert.traitOverrides.preferredContentSizeCategory=UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;Wait(.2);[cert.tableView reloadData];Wait(.2);UITableViewCell *cell=cert.tableView.visibleCells.firstObject;Check([cell.contentConfiguration isKindOfClass:UIListContentConfiguration.class] && cell.bounds.size.height>100,@"Certificate row is still a fixed nib layout");UIListContentConfiguration *configuration=(id)cell.contentConfiguration;Check(configuration.textProperties.numberOfLines==0 && configuration.secondaryTextProperties.numberOfLines==0,@"Certificate details cannot wrap");Check([configuration.secondaryTextProperties.color isEqual:UIColor.secondaryLabelColor],@"Expired color survives cell reuse");Save(window,@"native-certificate-large.png");
  MUCertificateCreationProgressView *progress=[[MUCertificateCreationProgressView alloc]initWithName:@"Certificate generation for a long identity name" email:@"identity@example.com"];Show(window,progress);progress.traitOverrides.preferredContentSizeCategory=UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;Wait(.2);Check(progress.nibName==nil,@"Certificate progress still uses fixed nib layout");BOOL spinner=NO;for(UIView *view in Subviews(progress.view))if([view isKindOfClass:UIActivityIndicatorView.class])spinner=((UIActivityIndicatorView *)view).isAnimating;Check(spinner,@"Native progress indicator is not running");Save(window,@"native-certificate-progress.png");
- for(NSString *name in @[@"MUPreferencesViewController",@"MUAdvancedAudioPreferencesViewController",@"MUAudioQualityPreferencesViewController",@"MUAudioSidetonePreferencesViewController",@"MURemoteControlPreferencesViewController",@"MUCertificatePreferencesViewController",@"MUVoiceActivitySetupViewController"]) {
+ for(NSString *name in @[@"MUPreferencesViewController",@"MUAdvancedAudioPreferencesViewController",@"MUAudioQualityPreferencesViewController",@"MUAudioSidetonePreferencesViewController",@"MUCertificatePreferencesViewController",@"MUVoiceActivitySetupViewController"]) {
   UITableViewController *settings=[NSClassFromString(name)new];Show(window,settings);settings.traitOverrides.preferredContentSizeCategory=UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;Wait(.15);[settings.tableView reloadData];Wait(.15);Check(settings.tableView.scrollEnabled && settings.tableView.rowHeight==UITableViewAutomaticDimension,@"Settings page does not support scrolling/self sizing");CheckContent(settings);Save(window,[name stringByAppendingString:@"-native.png"]);
   if([name isEqual:@"MUVoiceActivitySetupViewController"]){BOOL nativeMeter=NO;NSUInteger sliders=0;for(UIView *view in Subviews(settings.view)){if([view isKindOfClass:UIProgressView.class])nativeMeter=YES;if([view isKindOfClass:UISlider.class]){sliders++;Check(view.bounds.size.width>150 && view.bounds.size.height>=44,@"VAD slider is not accessible/full width");}}Check(nativeMeter && sliders>0,@"Voice detection still uses drawn background/slider accessories");}
  }
@@ -427,6 +436,41 @@ static void TokenAndDetectionChecks(UIWindow *window) {
  } @finally { [defaults setBool:oldProcessor forKey:@"AudioPreprocessor"];[defaults setObject:oldKind forKey:@"AudioVADKind"];[defaults setFloat:oldBelow forKey:@"AudioVADBelow"];[defaults setFloat:oldAbove forKey:@"AudioVADAbove"];[(id)UIApplication.sharedApplication.delegate reloadPreferences]; }
  [results addObject:@"PASS VAD mode and slider changes apply live; native controls retain 20pt edge padding"];
 }
+@interface MUPublicListFixture : MUPublicServerList
+@property(nonatomic, copy) NSData *bundledXML;
+@property(nonatomic, copy) NSData *downloadedXML;
+@end
+@implementation MUPublicListFixture
+- (NSData *)bundledListData { return self.bundledXML; }
+- (NSData *)downloadedListData { return self.downloadedXML; }
+@end
+static void PublicServerModelChecks(void) {
+ MUPublicListFixture *list = [MUPublicListFixture new];
+ NSString *us = @"<server name='A' ip='a.example' port='64738' country_code='US' continent_code='NA'/>";
+ NSString *de = @"<server name='B' ip='b.example' port='64738' country_code='DE' continent_code='EU'/>";
+ NSString *unknown = @"<server name='C' ip='c.example' port='64738'/>";
+ NSString *invalid = @"<server name='Invalid' port='64738' country_code='US' continent_code='NA'/>";
+ list.bundledXML = [[NSString stringWithFormat:@"<servers>%@%@%@</servers>",us,us,invalid] dataUsingEncoding:NSUTF8StringEncoding];
+ list.downloadedXML = [[NSString stringWithFormat:@"<servers>%@%@%@</servers>",us,de,unknown] dataUsingEncoding:NSUTF8StringEncoding];
+ [list parse];Check(list.isParsed && list.numberOfContinents==3,@"Public list grouping depends on removed continent resources");
+ NSMutableSet *hosts = [NSMutableSet set];BOOL localizedUS=NO;
+ NSLocale *locale = [NSLocale localeWithLocaleIdentifier:NSBundle.mainBundle.preferredLocalizations.firstObject ?: @"en"];
+ for(NSInteger continent=0;continent<list.numberOfContinents;continent++) {
+  for(NSInteger country=0;country<[list numberOfCountriesAtContinentIndex:continent];country++) {
+   NSUInteger indexes[] = {continent,country};NSDictionary *item=[list countryAtIndexPath:[NSIndexPath indexPathWithIndexes:indexes length:2]];
+   Check([item[@"name"]length]>0,@"A country without an ISO code has no fallback label");
+   for(NSDictionary *server in item[@"servers"]) {
+    Check(![hosts containsObject:server[@"ip"]],@"Bundled/downloaded public servers are duplicated");[hosts addObject:server[@"ip"]];
+    if([server[@"country_code"]isEqual:@"US"])localizedUS=[item[@"name"]isEqual:[locale displayNameForKey:NSLocaleCountryCode value:@"US"]];
+   }
+  }
+ }
+ Check(hosts.count==3 && localizedUS,@"Public servers are lost or country names bypass Foundation localization");
+ list.downloadedXML=[NSData data];[list invalidate];Check(!list.isParsed,@"Public list invalidation leaves its old model active");[list parse];
+ Check(list.numberOfContinents==1 && [list numberOfCountriesAtContinentIndex:0]==1,@"Refreshing public servers retains stale countries");
+ [results addObject:@"PASS bundled/downloaded public servers, duplicate filtering, system country names, missing codes and model refresh"];
+}
+
 static void Run(void) {
  results=[NSMutableArray array];Method start=class_getInstanceMethod(MLAudio.class,@selector(start));IMP previous=method_setImplementation(start,(IMP)NoAudioStart);
  NSString *language=NSProcessInfo.processInfo.environment[@"MU_UI_TEST_LANGUAGE"];
@@ -435,7 +479,7 @@ static void Run(void) {
   Check(NSBundle.mainBundle.localizations.count>=12,@"The installed app does not expose all twelve languages");
   [results addObject:[NSString stringWithFormat:@"PASS Foundation selected app language %@; Home = %@",language,NSLocalizedString(@"Home",nil)]];
  }
- @try{UIWindowScene *scene=(id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;UIWindow *window=[(id)scene.delegate valueForKey:@"window"];PasswordConnectionChecks(window);SetupAndCertificateChecks(window);CertificateNavigationChecks(window);TransmissionChecks(window);TokenAndDetectionChecks(window);FormChecks(window);NativeChecks(window);SearchChecks(window);MenuChecks(window);CrowdedServerSnapshots(window);PreviewAndHomeChecks(window);[results addObject:@"ALL INTERFACE AUDIT CHECKS PASSED"];}@catch(NSException *error){[results addObject:[NSString stringWithFormat:@"FAIL %@",error.reason]];}@finally{method_setImplementation(start,previous);[MLAudio.sharedAudio stop];}
+ @try{UIWindowScene *scene=(id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;UIWindow *window=[(id)scene.delegate valueForKey:@"window"];PublicServerModelChecks();PasswordConnectionChecks(window);SetupAndCertificateChecks(window);CertificateNavigationChecks(window);TransmissionChecks(window);TokenAndDetectionChecks(window);FormChecks(window);NativeChecks(window);SearchChecks(window);MenuChecks(window);CrowdedServerSnapshots(window);PreviewAndHomeChecks(window);[results addObject:@"ALL INTERFACE AUDIT CHECKS PASSED"];}@catch(NSException *error){[results addObject:[NSString stringWithFormat:@"FAIL %@",error.reason]];}@finally{method_setImplementation(start,previous);[MLAudio.sharedAudio stop];}
  [[results componentsJoinedByString:@"\n"]writeToFile:[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"composer-ui-results.txt"]atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 __attribute__((constructor))static void Schedule(void){dispatch_async(dispatch_get_main_queue(),^{[NSTimer scheduledTimerWithTimeInterval:1 repeats:NO block:^(NSTimer *timer){Run();}];});}

@@ -4,10 +4,8 @@
 // license that can be found in the LICENSE file.
 
 #import "MUMessageAttachmentViewController.h"
-#import "MUTableViewHeaderLabel.h"
 #import "MUImageViewController.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 
 @interface MUMessageAttachmentViewController () {
     NSArray *_links;
@@ -34,7 +32,7 @@
 
     self.navigationItem.title = NSLocalizedString(@"Attachments", nil);
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;

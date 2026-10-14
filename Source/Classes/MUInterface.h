@@ -35,15 +35,10 @@ static inline void MUConfigureFormCell(UITableViewCell *cell, NSString *title, U
         field.textAlignment = vertical ? NSTextAlignmentNatural : NSTextAlignmentRight;
     };
     // The handler receives its view; weak captures avoid retaining the stack.
-#if __has_feature(objc_arc)
     __weak UIStackView *weakStack = stack;
     __weak UILabel *weakLabel = label;
     __weak UITextField *weakField = field;
-#else
-    __unsafe_unretained UIStackView *weakStack = stack;
-    __unsafe_unretained UILabel *weakLabel = label;
-    __unsafe_unretained UITextField *weakField = field;
-#endif
+
     [stack registerForTraitChanges:@[UITraitPreferredContentSizeCategory.class] withHandler:^(__kindof UIView *view, UITraitCollection *previous) {
         BOOL vertical = UIContentSizeCategoryIsAccessibilityCategory(view.traitCollection.preferredContentSizeCategory);
         labelWidth.active = !vertical;
@@ -60,7 +55,4 @@ static inline void MUConfigureFormCell(UITableViewCell *cell, NSString *title, U
         [cell.contentView.heightAnchor constraintGreaterThanOrEqualToConstant:52]
     ]];
     update(stack);
-#if !__has_feature(objc_arc)
-    [label release]; [stack release];
-#endif
 }

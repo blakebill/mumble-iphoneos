@@ -5,7 +5,6 @@
 
 #import "MUAccessTokenViewController.h"
 #import "MUDatabase.h"
-#import "MUBackgroundView.h"
 
 @interface MUAccessTokenViewController () {
     MLServerModel    *_model;

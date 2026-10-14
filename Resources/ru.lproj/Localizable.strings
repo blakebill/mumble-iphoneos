@@ -131,7 +131,6 @@
 "Kicked by %@ for reason: \"%@\"" = "Исключён пользователем %@. Причина: «%@»";
 "LAN Servers" = "Серверы локальной сети";
 "LAN discovery unavailable" = "Поиск в локальной сети недоступен";
-"Last Updated" = "Последнее обновление";
 "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay." = "Оставьте выключенным для речи. Кодирование с малой задержкой сокращает задержку кодека, жертвуя оптимизацией речи.";
 "Leave this server?" = "Покинуть этот сервер?";
 "Legal" = "Правовая информация";
@@ -155,7 +154,6 @@
 "Microphone muted" = "Микрофон выключен";
 "Missing certificate" = "Нет сертификата";
 "Missing certificate for user" = "Нет сертификата пользователя";
-"Mixer Debug" = "Диагностика микшера";
 "Mumble Server" = "Сервер Mumble";
 "Mumble User" = "Пользователь Mumble";
 "Mumble continuously transmits all recorded audio." = "Mumble постоянно передаёт весь записываемый звук.";
@@ -214,7 +212,6 @@
 "Quality Presets" = "Предустановки качества";
 "Ready: %@" = "Готово: %@";
 "Reconnect" = "Переподключиться";
-"Remote Control" = "Удалённое управление";
 "Remove All" = "Удалить всё";
 "Remove Importable Certificates" = "Удалить сертификаты для импорта";
 "Remove Photo" = "Удалить фото";
@@ -301,4 +298,3 @@
 "Your certificate" = "Ваш сертификат";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS управляет эхоподавлением, шумоподавлением и уровнем микрофона. Режим микрофона можно выбрать до подключения. Доступность зависит от устройства и аудиомаршрута.";
 "—" = "—";
-"Enable" = "Включить";

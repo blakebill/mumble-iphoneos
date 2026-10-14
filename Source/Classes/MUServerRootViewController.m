@@ -12,7 +12,6 @@
 #import "MUConnectionController.h"
 #import "MUMessagesViewController.h"
 #import "MUDatabase.h"
-#import "MUAudioMixerDebugViewController.h"
 
 #import "MLClient.h"
 
@@ -328,14 +327,6 @@
     }];
     disconnect.attributes = UIMenuElementAttributesDestructive;
     [actions addObject:disconnect];
-    
-    if ([[[NSUserDefaults standardUserDefaults] objectForKey:@"AudioMixerDebug"] boolValue]) {
-        [actions addObject:[UIAction actionWithTitle:NSLocalizedString(@"Mixer Debug", nil) image:[UIImage systemImageNamed:@"waveform"] identifier:nil handler:^(UIAction *action) {
-            MUAudioMixerDebugViewController *audioMixerDebugViewController = [[MUAudioMixerDebugViewController alloc] init];
-            UINavigationController *navCtrl = [[UINavigationController alloc] initWithRootViewController:audioMixerDebugViewController];
-            [weakSelf presentViewController:navCtrl animated:YES completion:nil];
-        }]];
-    }
     
     [actions addObject:[UIAction actionWithTitle:NSLocalizedString(@"Access Tokens", nil) image:[UIImage systemImageNamed:@"key"] identifier:nil handler:^(UIAction *action) {
         MUServerRootViewController *controller = weakSelf;

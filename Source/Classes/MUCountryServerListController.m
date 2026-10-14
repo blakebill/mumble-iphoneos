@@ -11,7 +11,6 @@
 #import "MUServerRootViewController.h"
 #import "MUConnectionController.h"
 #import "MUServerCell.h"
-#import "MUColor.h"
 
 @interface MUCountryServerListController () <UISearchResultsUpdating, UITableViewDelegate, UITableViewDataSource> {
     UITableView    *_tableView;

@@ -4,13 +4,10 @@
 // license that can be found in the LICENSE file.
 
 #import "MUAdvancedAudioPreferencesViewController.h"
-#import "MUTableViewHeaderLabel.h"
 #import "MUApplicationDelegate.h"
 #import "MUAudioQualityPreferencesViewController.h"
 #import "MUAudioSidetonePreferencesViewController.h"
-#import "MUColor.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 
 #import "MLClient.h"
 #import <AVFoundation/AVFoundation.h>
@@ -47,7 +44,7 @@ static void *MUMicrophoneModeObservation = &MUMicrophoneModeObservation;
 
     self.title = NSLocalizedString(@"Advanced Audio", nil);
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
@@ -152,7 +149,7 @@ static void *MUMicrophoneModeObservation = &MUMicrophoneModeObservation;
     if ([indexPath section] == 0) {
         if ([indexPath row] == 0) {
             cell.textLabel.text = NSLocalizedString(@"Quality", nil);
-            cell.detailTextLabel.textColor = [MUColor selectedTextColor];
+            cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
             if ([[defaults stringForKey:@"AudioQualityKind"] isEqualToString:@"low"])
                 cell.detailTextLabel.text = NSLocalizedString(@"Low", nil);
@@ -186,9 +183,9 @@ static void *MUMicrophoneModeObservation = &MUMicrophoneModeObservation;
                 [slider setMinimumValue:0.0f];
                 float boost = [defaults floatForKey:@"AudioMicBoost"];
                 if (boost > 1.0f) {
-                    [slider setMinimumTrackTintColor:[MUColor badPingColor]];
+                    [slider setMinimumTrackTintColor:UIColor.systemRedColor];
                 } else {
-                    [slider setMinimumTrackTintColor:[MUColor goodPingColor]];
+                    [slider setMinimumTrackTintColor:UIColor.systemGreenColor];
                 }
                 [slider setValue:boost];
                 [slider addTarget:self action:@selector(micBoostChanged:) forControlEvents:UIControlEventValueChanged];
@@ -198,7 +195,7 @@ static void *MUMicrophoneModeObservation = &MUMicrophoneModeObservation;
     } else if ([indexPath section] == 2) {
         if ([indexPath row] == 0) {
             cell.textLabel.text = NSLocalizedString(@"Sidetone", nil);
-            cell.detailTextLabel.textColor = [MUColor selectedTextColor];
+            cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
             if ([defaults boolForKey:@"AudioSidetone"]) {
                 cell.detailTextLabel.text = NSLocalizedString(@"On", nil);
@@ -279,9 +276,9 @@ static void *MUMicrophoneModeObservation = &MUMicrophoneModeObservation;
 - (void) micBoostChanged:(UISlider *)sender {
     [[NSUserDefaults standardUserDefaults] setFloat:sender.value forKey:@"AudioMicBoost"];
     if (sender.value > 1.0f) {
-        [sender setMinimumTrackTintColor:[MUColor badPingColor]];
+        [sender setMinimumTrackTintColor:UIColor.systemRedColor];
     } else {
-        [sender setMinimumTrackTintColor:[MUColor goodPingColor]];
+        [sender setMinimumTrackTintColor:UIColor.systemGreenColor];
     }
 }
 

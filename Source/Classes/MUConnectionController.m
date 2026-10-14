@@ -24,7 +24,6 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     UIAlertController          *_alertCtrl;
 
     UIAlertController          *_rejectAlertCtrl;
-    MLRejectReason             _rejectReason;
 
     NSString                   *_hostname;
     NSUInteger                 _port;
@@ -414,14 +413,8 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     };
     void (^reconnectHandler)(UIAlertAction * _Nonnull action) = ^(UIAlertAction * _Nonnull action) {
         if (attempt != self->_connectionAttempt) return;
-        if (self->_rejectReason == MLRejectReasonInvalidUsername || self->_rejectReason == MLRejectReasonUsernameInUse) {
-            UITextField *textField = [[self->_rejectAlertCtrl textFields] firstObject];
-            self->_username = [[textField text] copy];
-        } else if (self->_rejectReason == MLRejectReasonWrongServerPassword || self->_rejectReason == MLRejectReasonWrongUserPassword) {
-            UITextField *textField = [[self->_rejectAlertCtrl textFields] firstObject];
-            self->_password = [[textField text] copy];
-        }
-        
+        self->_username = [self->_rejectAlertCtrl.textFields.firstObject.text copy];
+
         self->_rejectAlertCtrl = nil;
         [self establishConnection];
         [self showConnectingView];
@@ -520,7 +513,6 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     }
 
     _rejectAlertCtrl = alertCtrl;
-    _rejectReason = reason;
 
     [self hideConnectingViewWithCompletion:^{
         [self presentConnectionAlert:alertCtrl forAttempt:attempt];

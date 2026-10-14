@@ -26,11 +26,11 @@ xcrun simctl terminate booted "$validation_bundle" >/dev/null 2>&1 || true
 xcrun simctl install booted "$validation_root/Mumble.app"
 validation_data=$(xcrun simctl get_app_container booted "$validation_bundle" data)
 rm -f "$validation_data/Documents/composer-ui-results.txt"
-launch_arguments=()
+launch_arguments=("$validation_bundle")
 if [[ -n "${MU_UI_TEST_LANGUAGE:-}" ]]; then
-    launch_arguments=(-AppleLanguages "($MU_UI_TEST_LANGUAGE)")
+    launch_arguments+=(-AppleLanguages "($MU_UI_TEST_LANGUAGE)")
 fi
-SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$validation_root/MUNativeUIValidation.dylib" SIMCTL_CHILD_MU_UI_TEST_LANGUAGE="${MU_UI_TEST_LANGUAGE:-}" xcrun simctl launch booted "$validation_bundle" "${launch_arguments[@]}"
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$validation_root/MUNativeUIValidation.dylib" SIMCTL_CHILD_MU_UI_TEST_LANGUAGE="${MU_UI_TEST_LANGUAGE:-}" xcrun simctl launch booted "${launch_arguments[@]}"
 for attempt in {1..300}; do
     if [[ -f "$validation_data/Documents/composer-ui-results.txt" ]]; then
         cat "$validation_data/Documents/composer-ui-results.txt"

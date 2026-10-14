@@ -131,7 +131,6 @@
 "Kicked by %@ for reason: \"%@\"" = "Expulsé par %@ pour la raison : « %@ »";
 "LAN Servers" = "Serveurs locaux";
 "LAN discovery unavailable" = "Découverte locale indisponible";
-"Last Updated" = "Dernière mise à jour";
 "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay." = "Laissez cette option désactivée pour la parole. L’encodage à faible latence réduit le délai du codec au détriment de l’optimisation vocale.";
 "Leave this server?" = "Quitter ce serveur ?";
 "Legal" = "Informations légales";
@@ -155,7 +154,6 @@
 "Microphone muted" = "Micro coupé";
 "Missing certificate" = "Certificat manquant";
 "Missing certificate for user" = "Certificat utilisateur manquant";
-"Mixer Debug" = "Diagnostic du mélangeur";
 "Mumble Server" = "Serveur Mumble";
 "Mumble User" = "Utilisateur Mumble";
 "Mumble continuously transmits all recorded audio." = "Mumble transmet en continu tout l’audio enregistré.";
@@ -214,7 +212,6 @@
 "Quality Presets" = "Préréglages de qualité";
 "Ready: %@" = "Prêt : %@";
 "Reconnect" = "Se reconnecter";
-"Remote Control" = "Contrôle à distance";
 "Remove All" = "Tout retirer";
 "Remove Importable Certificates" = "Retirer les certificats importables";
 "Remove Photo" = "Retirer la photo";
@@ -301,4 +298,3 @@
 "Your certificate" = "Votre certificat";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS gère l’annulation d’écho, la réduction du bruit et le niveau du micro. Choisissez un mode micro avant la connexion. Les modes disponibles dépendent de l’appareil et de la sortie audio.";
 "—" = "—";
-"Enable" = "Activer";

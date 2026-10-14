@@ -6,11 +6,8 @@
 #import "MLClient.h"
 
 @interface MUPublicServerList () {
-    NSData              *_serverListXML;
     NSMutableDictionary *_continentCountries;
     NSMutableDictionary *_countryServers;
-    NSDictionary        *_continentNames;
-    NSDictionary        *_countryNames;
     NSMutableArray      *_modelContinents;
     NSMutableArray      *_modelCountries;
     NSMutableSet        *_seenServers;
@@ -18,22 +15,11 @@
 }
 + (NSString *) filePath;
 + (BOOL) dataLooksLikeServerList:(NSData *)data;
-- (void) loadXML;
 @end
 
 NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListDidUpdateNotification";
 
-@interface MUPublicServerListFetcher () {}
-@end
-
 @implementation MUPublicServerListFetcher
-
-- (id) init {
-    if ((self = [super init])) {
-        // ...
-    }
-    return self;
-}
 
 - (void) attemptUpdate {
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[MLServices regionalServerListURL]];
@@ -77,16 +63,6 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
     return [directory stringByAppendingPathComponent:@"publist.xml"];
 }
 
-- (id) init {
-    if ((self = [super init])) {
-        [self loadXML];
-        
-        _continentNames = [[NSDictionary alloc] initWithContentsOfFile: [NSString stringWithFormat:@"%@/Continents.plist", [[NSBundle mainBundle] resourcePath]]];
-        _countryNames = [[NSDictionary alloc] initWithContentsOfFile: [NSString stringWithFormat:@"%@/Countries.plist", [[NSBundle mainBundle] resourcePath]]];
-    }
-    return self;
-}
-
 - (NSData *) bundledListData {
     return [[NSData alloc] initWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"publist" ofType:@"xml"]];
 }
@@ -95,15 +71,10 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
     return [[NSData alloc] initWithContentsOfFile:[MUPublicServerList filePath]];
 }
 
-- (void) loadXML {
-    _serverListXML = [self bundledListData];
-}
-
 - (void) invalidate {
     _parsed = NO;
     _modelContinents = nil;
     _modelCountries = nil;
-    [self loadXML];
 }
 
 - (void) parse {
@@ -111,7 +82,7 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
     if (_parsed)
         return;
 
-    _continentCountries = [[NSMutableDictionary alloc] initWithCapacity:[_continentNames count]];
+    _continentCountries = [[NSMutableDictionary alloc] initWithCapacity:7];
     _countryServers = [[NSMutableDictionary alloc] init];
     _seenServers = [[NSMutableSet alloc] init];
 
@@ -126,9 +97,7 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
     }
 
     // Transform from NSDictionary representation to a NSArray-model
-    NSMutableSet *continentCodeSet = [NSMutableSet setWithArray:[_continentNames allKeys]];
-    [continentCodeSet addObjectsFromArray:[_continentCountries allKeys]];
-    NSArray *continentCodes = [[continentCodeSet allObjects] sortedArrayUsingSelector:@selector(compare:)];
+    NSArray *continentCodes = [[_continentCountries allKeys] sortedArrayUsingSelector:@selector(compare:)];
     _modelContinents = [[NSMutableArray alloc] initWithCapacity:[continentCodes count]];
     _modelCountries = [[NSMutableArray alloc] init];
     NSLocale *displayLocale = [NSLocale localeWithLocaleIdentifier:NSBundle.mainBundle.preferredLocalizations.firstObject ?: @"en"];
@@ -149,16 +118,7 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
             continue;
         }
 
-        NSString *continentName = continentTitles[key] ?: [_continentNames objectForKey:key];
-        if (continentName == nil && [key isEqualToString:@"AF"]) {
-            continentName = NSLocalizedString(@"Africa", nil);
-        }
-        if (continentName == nil && [key isEqualToString:@"nil"]) {
-            continentName = NSLocalizedString(@"Unknown", nil);
-        }
-        if (continentName == nil) {
-            continentName = key;
-        }
+        NSString *continentName = continentTitles[key] ?: key;
         [_modelContinents addObject:continentName];
 
         NSMutableArray *countries = [NSMutableArray arrayWithCapacity:[countryCodes count]];
@@ -167,10 +127,7 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
             if (countryServerList.count == 0) {
                 continue;
             }
-            NSString *countryName = [displayLocale displayNameForKey:NSLocaleCountryCode value:countryKey] ?: [_countryNames objectForKey:countryKey];
-            if (countryName == nil) {
-                countryName = countryKey;
-            }
+            NSString *countryName = [displayLocale displayNameForKey:NSLocaleCountryCode value:countryKey] ?: countryKey;
             [countries addObject:@{ @"name": countryName, @"servers": countryServerList }];
         }
         [_modelCountries addObject:countries];
@@ -178,6 +135,7 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
 
     _continentCountries = nil;
     _countryServers = nil;
+    _seenServers = nil;
     _parsed = YES;
 }
 
@@ -226,9 +184,6 @@ NSString * const MUPublicServerListDidUpdateNotification = @"MUPublicServerListD
             [countries addObject:countryCode];
         }
     }
-}
-
-- (void)parserDidEndDocument:(NSXMLParser *)parser {
 }
 
 #pragma mark -

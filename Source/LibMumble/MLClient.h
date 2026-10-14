@@ -202,7 +202,7 @@ typedef struct {
     float micBoost;
     BOOL enablePreprocessor, enableEchoCancellation, enableSideTone;
     float sidetoneVolume;
-    BOOL preferReceiverOverSpeaker, opusForceCELTMode, audioMixerDebug;
+    BOOL preferReceiverOverSpeaker, opusForceCELTMode;
 } MLAudioSettings;
 FOUNDATION_EXPORT NSString *MLAudioDidRestartNotification;
 @protocol MLAudioDelegate <NSObject>

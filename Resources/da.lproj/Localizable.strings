@@ -131,7 +131,6 @@
 "Kicked by %@ for reason: \"%@\"" = "Sparket ud af %1$@ med begrundelse: \"%2$@\"";
 "LAN Servers" = "LAN servere";
 "LAN discovery unavailable" = "LAN-søgning er ikke tilgængelig";
-"Last Updated" = "Sidst opdateret";
 "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay." = "Lad dette være slået fra til tale. Kodning med lav forsinkelse forkorter codec-forsinkelsen på bekostning af taleoptimeringen.";
 "Leave this server?" = "Vil du forlade denne server?";
 "Legal" = "Rettigheder";
@@ -155,7 +154,6 @@
 "Microphone muted" = "Mikrofon slået fra";
 "Missing certificate" = "Manglende certifikat";
 "Missing certificate for user" = "Manglende certifikat for bruger";
-"Mixer Debug" = "Mixerdiagnostik";
 "Mumble Server" = "Mumble server";
 "Mumble User" = "Mumble bruger";
 "Mumble continuously transmits all recorded audio." = "Mumble sender løbende al optaget lyd.";
@@ -214,7 +212,6 @@
 "Quality Presets" = "Kvalitetsindstillinger";
 "Ready: %@" = "Klar: %@";
 "Reconnect" = "Genforbind";
-"Remote Control" = "Fjernstyring";
 "Remove All" = "Fjern alle";
 "Remove Importable Certificates" = "Fjern importérbare certifikater";
 "Remove Photo" = "Fjern foto";
@@ -301,4 +298,3 @@
 "Your certificate" = "Dit certifikat";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS håndterer ekkoreduktion, støjreduktion og mikrofonens lydniveau. Du kan vælge en mikrofontilstand, før du opretter forbindelse. Tilgængeligheden afhænger af din enhed og lydforbindelse.";
 "—" = "—";
-"Enable" = "Aktivér";

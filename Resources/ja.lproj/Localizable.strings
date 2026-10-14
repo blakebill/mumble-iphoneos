@@ -131,7 +131,6 @@
 "Kicked by %@ for reason: \"%@\"" = "%@ により退出させられました。理由：「%@」";
 "LAN Servers" = "LAN サーバー";
 "LAN discovery unavailable" = "LAN 検出を利用できません";
-"Last Updated" = "最終更新";
 "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay." = "会話ではオフにしてください。低遅延エンコードは音声の最適化よりもコーデックの遅延短縮を優先します。";
 "Leave this server?" = "このサーバーから退出しますか？";
 "Legal" = "法的情報";
@@ -155,7 +154,6 @@
 "Microphone muted" = "マイクはミュート中";
 "Missing certificate" = "証明書がありません";
 "Missing certificate for user" = "ユーザーの証明書がありません";
-"Mixer Debug" = "ミキサー診断";
 "Mumble Server" = "Mumble サーバー";
 "Mumble User" = "Mumble ユーザー";
 "Mumble continuously transmits all recorded audio." = "Mumble は録音した音声を常に送信します。";
@@ -214,7 +212,6 @@
 "Quality Presets" = "品質プリセット";
 "Ready: %@" = "準備完了：%@";
 "Reconnect" = "再接続";
-"Remote Control" = "リモート操作";
 "Remove All" = "すべて削除";
 "Remove Importable Certificates" = "読み込み可能な証明書を削除";
 "Remove Photo" = "写真を削除";
@@ -301,4 +298,3 @@
 "Your certificate" = "あなたの証明書";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS がエコー除去、ノイズ低減、マイクレベルを処理します。接続前にマイクモードを選べます。利用可能なモードはデバイスと音声経路によって異なります。";
 "—" = "—";
-"Enable" = "有効にする";

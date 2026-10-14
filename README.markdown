@@ -37,6 +37,7 @@ the Legal screen are refreshed from the source licenses. Generated binaries are
 ignored by Git. Rebuild the framework after changing library sources/dependencies.
 
 Open `Mumble.xcodeproj`, select **Mumble**, configure your signing team, and build.
+Use Debug for development and Release for distribution; Archive also uses Release.
 For builds without signing:
 
 ```sh
@@ -44,9 +45,13 @@ xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk ip
 xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
 ```
 
-Run the local backend integration tests:
+Check project references, packaged resources and message conversion, then run
+the local backend integration tests:
 
 ```sh
+python3 Scripts/check-project-integrity.py
+python3 Scripts/check-localizations.py
+bash Scripts/test-text-messages.sh
 bash Scripts/test-libmumble.sh
 ```
 

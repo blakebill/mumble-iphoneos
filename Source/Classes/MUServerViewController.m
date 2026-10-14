@@ -5,9 +5,7 @@
 #import "MUServerViewController.h"
 #import "MUUserStateAcessoryView.h"
 #import "MUNotificationController.h"
-#import "MUColor.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 #import "MUServerTableViewCell.h"
 #import "MUApplicationDelegate.h"
 

@@ -6,12 +6,9 @@
 #import "MUVoiceActivitySetupViewController.h"
 #import "MUApplicationDelegate.h"
 #import "MUConnectionController.h"
-#import "MUTableViewHeaderLabel.h"
 #import "MUAudioBarViewCell.h"
 #import "MLClient.h"
-#import "MUColor.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 
 @implementation MUVoiceActivitySetupViewController
 
@@ -31,7 +28,7 @@
     
     self.navigationItem.title = NSLocalizedString(@"Voice Activity", nil);
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;

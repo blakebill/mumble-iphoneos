@@ -131,7 +131,6 @@
 "Kicked by %@ for reason: \"%@\"" = "Kicked by %@ for reason: \"%@\"";
 "LAN Servers" = "LAN Servers";
 "LAN discovery unavailable" = "LAN discovery unavailable";
-"Last Updated" = "Last Updated";
 "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay." = "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay.";
 "Leave this server?" = "Leave this server?";
 "Legal" = "Legal";
@@ -155,7 +154,6 @@
 "Microphone muted" = "Microphone muted";
 "Missing certificate" = "Missing certificate";
 "Missing certificate for user" = "Missing certificate for user";
-"Mixer Debug" = "Mixer Debug";
 "Mumble Server" = "Mumble Server";
 "Mumble User" = "Mumble User";
 "Mumble continuously transmits all recorded audio." = "Mumble continuously transmits all recorded audio.";
@@ -214,7 +212,6 @@
 "Quality Presets" = "Quality Presets";
 "Ready: %@" = "Ready: %@";
 "Reconnect" = "Reconnect";
-"Remote Control" = "Remote Control";
 "Remove All" = "Remove All";
 "Remove Importable Certificates" = "Remove Importable Certificates";
 "Remove Photo" = "Remove Photo";
@@ -301,4 +298,3 @@
 "Your certificate" = "Your certificate";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route.";
 "—" = "—";
-"Enable" = "Enable";

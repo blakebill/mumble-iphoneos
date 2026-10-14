@@ -5,12 +5,9 @@
 
 #import "MUFavouriteServerEditViewController.h"
 
-#import "MUColor.h"
 #import "MUDatabase.h"
 #import "MUFavouriteServer.h"
-#import "MUTableViewHeaderLabel.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 
 @interface MUFavouriteServerEditViewController () {
     BOOL               _editMode;
@@ -176,7 +173,7 @@
     MUConfigureTable(self.tableView);
     self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 44;
     

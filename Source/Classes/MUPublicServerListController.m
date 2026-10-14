@@ -6,9 +6,7 @@
 #import "MUPublicServerList.h"
 #import "MUPublicServerListController.h"
 #import "MUCountryServerListController.h"
-#import "MUTableViewHeaderLabel.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 
 @interface MUPublicServerListController () {
     MUPublicServerList        *_serverList;
@@ -29,7 +27,7 @@
 
     self.navigationItem.title = NSLocalizedString(@"Public Servers", nil);
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;

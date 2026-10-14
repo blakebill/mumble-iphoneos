@@ -44,9 +44,7 @@ Manual microphone boost applies only with native processing disabled.
 Application audio preferences and the keychain/database are retained.
 
 The source snapshot and integration changes are documented in
-`Dependencies/libmumble/UPSTREAM.md`. The original libmumble checkout and the
-former MumbleKit checkout are preserved on this machine; neither is a build
-dependency. The generated XCFramework includes static dependency libraries and
+`Dependencies/libmumble/UPSTREAM.md`. The generated XCFramework includes static dependency libraries and
 headers and is rebuilt using `Scripts/build-libmumble.sh`.
 
 ## Validation

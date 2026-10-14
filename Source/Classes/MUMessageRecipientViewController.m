@@ -4,9 +4,7 @@
 
 #import "MUMessageRecipientViewController.h"
 #import "MUUserStateAcessoryView.h"
-#import "MUColor.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 #import "MUServerTableViewCell.h"
 
 @interface MUMessageRecipientViewController () {

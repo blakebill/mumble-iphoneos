@@ -8,10 +8,8 @@
 #import "MUDatabase.h"
 #import "MUFavouriteServer.h"
 #import "MUFavouriteServerEditViewController.h"
-#import "MUTableViewHeaderLabel.h"
 #import "MUConnectionController.h"
 #import "MUServerCell.h"
-#import "MUBackgroundView.h"
 
 @interface MUFavouriteServerListController () {
     NSMutableArray     *_favouriteServers;

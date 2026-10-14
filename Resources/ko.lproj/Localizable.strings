@@ -131,7 +131,6 @@
 "Kicked by %@ for reason: \"%@\"" = "%@님이 내보냈습니다. 사유: “%@”";
 "LAN Servers" = "LAN 서버";
 "LAN discovery unavailable" = "LAN 검색을 사용할 수 없습니다";
-"Last Updated" = "마지막 업데이트";
 "Leave off for speech. Low-delay encoding trades voice optimization for a shorter codec delay." = "음성 통화에는 꺼 두세요. 저지연 인코딩은 음성 최적화 대신 코덱 지연을 줄이는 데 중점을 둡니다.";
 "Leave this server?" = "이 서버에서 나갈까요?";
 "Legal" = "법적 정보";
@@ -155,7 +154,6 @@
 "Microphone muted" = "마이크 음소거됨";
 "Missing certificate" = "인증서 없음";
 "Missing certificate for user" = "사용자 인증서 없음";
-"Mixer Debug" = "믹서 진단";
 "Mumble Server" = "Mumble 서버";
 "Mumble User" = "Mumble 사용자";
 "Mumble continuously transmits all recorded audio." = "Mumble은 녹음되는 모든 오디오를 계속 전송합니다.";
@@ -214,7 +212,6 @@
 "Quality Presets" = "품질 프리셋";
 "Ready: %@" = "준비됨: %@";
 "Reconnect" = "다시 연결";
-"Remote Control" = "원격 제어";
 "Remove All" = "모두 제거";
 "Remove Importable Certificates" = "가져올 수 있는 인증서 제거";
 "Remove Photo" = "사진 제거";
@@ -301,4 +298,3 @@
 "Your certificate" = "내 인증서";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS가 에코 제거, 잡음 감소, 마이크 레벨을 처리합니다. 연결 전에 마이크 모드를 선택할 수 있습니다. 사용 가능한 모드는 기기와 오디오 경로에 따라 다릅니다.";
 "—" = "—";
-"Enable" = "활성화";

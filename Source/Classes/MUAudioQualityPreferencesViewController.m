@@ -4,7 +4,6 @@
 // license that can be found in the LICENSE file.
 
 #import "MUAudioQualityPreferencesViewController.h"
-#import "MUBackgroundView.h"
 #import "MUApplicationDelegate.h"
 
 @implementation MUAudioQualityPreferencesViewController
@@ -23,7 +22,7 @@
     
     self.title = NSLocalizedString(@"Audio Quality", nil);
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;

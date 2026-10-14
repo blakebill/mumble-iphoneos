@@ -20,7 +20,6 @@
 #import "MUImageViewController.h"
 #import "MUMessagesDatabase.h"
 #import "MUDataURL.h"
-#import "MUColor.h"
 #import "MUImage.h"
 
 @interface MUMessagesViewController () <UITableViewDelegate, UITableViewDataSource, MLServerModelDelegate, UITextViewDelegate, PHPickerViewControllerDelegate, MUMessageBubbleTableViewCellDelegate, MUMessageRecipientViewControllerDelegate> {

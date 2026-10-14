@@ -4,10 +4,7 @@
 // license that can be found in the LICENSE file.
 
 #import "MUAudioSidetonePreferencesViewController.h"
-#import "MUTableViewHeaderLabel.h"
-#import "MUColor.h"
 #import "MUImage.h"
-#import "MUBackgroundView.h"
 
 @implementation MUAudioSidetonePreferencesViewController
 
@@ -25,7 +22,7 @@
     
     self.title = NSLocalizedString(@"Sidetone", nil);
     
-    self.tableView.backgroundView = [MUBackgroundView backgroundView];
+    self.tableView.backgroundView = nil;
     
     {
         self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;

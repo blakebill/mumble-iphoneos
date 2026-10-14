@@ -8,7 +8,7 @@
 @end
 
 @implementation MUCertificateCell
-+ (MUCertificateCell *)loadFromNib {
++ (MUCertificateCell *)certificateCell {
     return [[self alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"CertificateCell"];
 }
 - (void)updateContent {
