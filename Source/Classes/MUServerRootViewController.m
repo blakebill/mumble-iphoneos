@@ -16,6 +16,87 @@
 #import "MLClient.h"
 
 
+// Keep the message controller attached while the secondary display becomes a
+// shared message/control surface. Folding never transfers a live conversation.
+@interface MUServerSecondaryViewController : UIViewController
+@property(nonatomic) BOOL showsVoiceControls;
+@property(nonatomic) BOOL showsPaneTitle;
+- (instancetype)initWithMessages:(MUMessagesViewController *)messages server:(MUServerViewController *)server;
+@end
+
+@implementation MUServerSecondaryViewController {
+    MUMessagesViewController *_messages;
+    __weak MUServerViewController *_server;
+    UIView *_controlsView;
+    UILabel *_paneTitleLabel;
+    CGFloat _controlsHeight;
+}
+- (instancetype)initWithMessages:(MUMessagesViewController *)messages server:(MUServerViewController *)server {
+    if ((self = [super init])) { _messages = messages; _server = server; }
+    return self;
+}
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.clipsToBounds = YES;
+    [self addChildViewController:_messages];
+    [self.view addSubview:_messages.view];
+    [_messages didMoveToParentViewController:self];
+    _paneTitleLabel = [UILabel new];
+    _paneTitleLabel.text = NSLocalizedString(@"Messages", nil);
+    _paneTitleLabel.accessibilityTraits = UIAccessibilityTraitHeader;
+    _paneTitleLabel.adjustsFontForContentSizeCategory = YES;
+    _paneTitleLabel.numberOfLines = 0;
+    [self.view addSubview:_paneTitleLabel];
+    [self registerForTraitChanges:@[[UITraitPreferredContentSizeCategory class]] withHandler:^(__kindof MUServerSecondaryViewController *controller, UITraitCollection *previousTraits) {
+        [controller.view setNeedsLayout];
+    }];
+    _controlsView = [UIView new];
+    self.view.backgroundColor = UIColor.systemBackgroundColor;
+    _controlsHeight = 220;
+    [self.view addSubview:_controlsView];
+    [self updateContent];
+}
+- (void)setShowsVoiceControls:(BOOL)showsVoiceControls {
+    if (_showsVoiceControls == showsVoiceControls) return;
+    _showsVoiceControls = showsVoiceControls;
+    if (self.isViewLoaded) [self updateContent];
+}
+- (void)setShowsPaneTitle:(BOOL)showsPaneTitle {
+    if (_showsPaneTitle == showsPaneTitle) return;
+    _showsPaneTitle = showsPaneTitle;
+    [self.viewIfLoaded setNeedsLayout];
+}
+- (void)updateContent {
+    _controlsView.hidden = !_showsVoiceControls;
+    _server.voiceControlsHostView = _showsVoiceControls ? _controlsView : nil;
+    [self.view setNeedsLayout];
+}
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGRect content = self.view.bounds;
+    CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
+    _paneTitleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleTitle2 compatibleWithTraitCollection:self.traitCollection];
+    _paneTitleLabel.hidden = !_showsPaneTitle || CGRectIsEmpty(content);
+    CGFloat heading = _showsPaneTitle ? ceil([_paneTitleLabel sizeThatFits:CGSizeMake(MAX(1, safe.size.width - 40), CGFLOAT_MAX)].height) : 0;
+    _paneTitleLabel.frame = CGRectMake(CGRectGetMinX(safe) + 20, CGRectGetMinY(safe) + 16, MAX(0, safe.size.width - 40), heading);
+    CGFloat messageTop = _showsPaneTitle ? MIN(content.size.height, CGRectGetMaxY(_paneTitleLabel.frame) + 12) : 0;
+    CGFloat footer = _showsVoiceControls ? MIN(_controlsHeight, content.size.height) : 0;
+    _messages.view.frame = CGRectMake(0, messageTop, content.size.width, MAX(0, content.size.height - messageTop - footer));
+    _controlsView.frame = _showsVoiceControls ? CGRectMake(0, content.size.height - footer, content.size.width, footer) : CGRectZero;
+    [_server layoutVoiceControls];
+    if (_showsVoiceControls) {
+        CGFloat height = [_server voiceControlsContentHeight];
+        if (height > 0) {
+            CGFloat preferred = ceil(height + 24 + _controlsView.safeAreaInsets.top + _controlsView.safeAreaInsets.bottom);
+            if (fabs(preferred - _controlsHeight) > .5) {
+                _controlsHeight = preferred;
+                [self.view setNeedsLayout];
+            }
+        }
+    }
+}
+@end
+
 @interface MUServerRootViewController () <MLConnectionDelegate, MLServerModelDelegate> {
     MLConnection                *_connection;
     MLServerModel               *_model;
@@ -23,14 +104,23 @@
     NSInteger                   _segmentIndex;
     UISegmentedControl          *_segmentedControl;
     UIBarButtonItem             *_menuButton;
+    UIDeferredMenuElement       *_menuActions;
     UIBarButtonItem             *_disconnectButton;
 
     MUServerViewController      *_serverView;
     MUMessagesViewController    *_messagesView;
     
     NSInteger                   _unreadMessages;
+    UIViewController            *_conversationContainer;
+    MUServerSecondaryViewController *_secondaryView;
+    BOOL                         _showingBothPanes, _usingFoldedControls, _usingBookLayout, _updatingLayout;
+    CGRect                       _keyboardFrameInScreen;
+    BOOL                         _hasKeyboardFrame;
+
 }
 - (NSArray<UIMenuElement *> *)serverMenuActions;
+- (void)updateConversationLayout;
+- (void)updateNativeArrangement;
 @end
 
 @implementation MUServerRootViewController
@@ -52,6 +142,7 @@
 }
 
 - (void) dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
     [_model removeDelegate:self];
     [_connection setDelegate:nil];
 }
@@ -64,6 +155,10 @@
 
 - (void) viewDidLoad {
     [super viewDidLoad];
+    self.view.keyboardLayoutGuide.followsUndockedKeyboard = YES;
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardFrameWillChange:) name:UIKeyboardWillChangeFrameNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardFrameWillChange:) name:UIKeyboardWillShowNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardFrameWillChange:) name:UIKeyboardWillHideNotification object:nil];
 
     _segmentedControl = [[UISegmentedControl alloc] initWithItems:
                          [NSArray arrayWithObjects:
@@ -80,12 +175,14 @@
     UIDeferredMenuElement *actions = [UIDeferredMenuElement elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)) {
         completion([weakSelf serverMenuActions] ?: @[]);
     }];
+    _menuActions = actions;
     _menuButton = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"] menu:[UIMenu menuWithChildren:@[actions]]];
     _menuButton.accessibilityLabel = NSLocalizedString(@"Server", nil);
     
     UIImageSymbolConfiguration *barIcon = [UIImageSymbolConfiguration configurationWithPointSize:20 weight:UIImageSymbolWeightMedium];
     _disconnectButton = [self barButtonWithImage:[[UIImage systemImageNamed:@"xmark.circle.fill" withConfiguration:barIcon] imageWithTintColor:[UIColor systemRedColor] renderingMode:UIImageRenderingModeAlwaysOriginal] action:@selector(disconnectButtonClicked:)];
     _disconnectButton.accessibilityLabel = NSLocalizedString(@"Disconnect", nil);
+    _disconnectButton.title = NSLocalizedString(@"Disconnect", nil);
     
     [_segmentedControl sizeToFit];
     CGRect segmentFrame = _segmentedControl.frame;
@@ -95,22 +192,173 @@
     [self updateUnreadMessageCount];
 
     
-    [self applyNavigationItemsToViewController:_serverView];
-    
-    [self setViewControllers:[NSArray arrayWithObject:_serverView] animated:NO];
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        UIArrangementViewController *arrangement = [UIArrangementViewController new];
+        _conversationContainer = arrangement;
+        _secondaryView = [[MUServerSecondaryViewController alloc] initWithMessages:_messagesView server:_serverView];
+        [self updateNativeArrangement];
+        [arrangement setViewController:_serverView forPlacement:UIArrangementViewControllerViewPlacementPrimary animated:NO];
+        [arrangement setViewController:_secondaryView forPlacement:UIArrangementViewControllerViewPlacementSecondary animated:NO];
+        [self applyNavigationItemsToViewController:arrangement];
+        [self setViewControllers:@[arrangement] animated:NO];
+    } else
+#endif
+    {
+        [self applyNavigationItemsToViewController:_serverView];
+        [self setViewControllers:@[_serverView] animated:NO];
+    }
 
     self.toolbar.barStyle = UIBarStyleDefault;
 }
 
-- (void) viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    // Presentation can finish without another layout pass. Reconcile after its
+    // coordinator clears, using the final window geometry and division regions.
+    __weak MUServerRootViewController *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [weakSelf updateConversationLayout];
+        [weakSelf.viewIfLoaded setNeedsLayout];
+    });
 }
 
-- (UIInterfaceOrientationMask) supportedInterfaceOrientations {
-    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
-        return UIInterfaceOrientationMaskAll;
+- (void)viewSafeAreaInsetsDidChange {
+    [super viewSafeAreaInsetsDidChange];
+    [self.view setNeedsLayout];
+}
+
+// Resolve layout from this scene's available space, including vertical system bars.
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    [self updateConversationLayout];
+}
+
+static UIView *MUFirstResponderInView(UIView *view) {
+    if (view.isFirstResponder) return view;
+    for (UIView *child in view.subviews) {
+        UIView *responder = MUFirstResponderInView(child);
+        if (responder) return responder;
     }
-    return UIInterfaceOrientationMaskPortrait;
+    return nil;
+}
+
+- (void)keyboardFrameWillChange:(NSNotification *)notification {
+    if (!self.viewIfLoaded.window || [notification.userInfo[UIKeyboardIsLocalUserInfoKey] isEqual:@NO]) return;
+    _keyboardFrameInScreen = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    _hasKeyboardFrame = YES;
+    [self.view setNeedsLayout];
+}
+
+- (void)updateConversationLayout {
+    if (_updatingLayout || !self.view.window || self.viewControllers.count != 1 || self.transitionCoordinator) return;
+    BOOL wide = NO, foldedControls = NO, bookLayout = NO;
+    UIView *responder = MUFirstResponderInView(_messagesView.viewIfLoaded);
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        CGRect usable = self.view.safeAreaLayoutGuide.layoutFrame;
+        CGFloat availableBottom = CGRectGetMaxY(usable);
+        if (responder) {
+            availableBottom = MIN(availableBottom, CGRectGetMinY(self.view.keyboardLayoutGuide.layoutFrame));
+            // A keyboard on the lower display may not invalidate the navigation
+            // container's guide. Resolve its system frame in this scene as well.
+            if (_hasKeyboardFrame) {
+                CGRect keyboard = [self.view convertRect:_keyboardFrameInScreen fromCoordinateSpace:self.view.window.windowScene.screen.coordinateSpace];
+                if (!CGRectIsEmpty(CGRectIntersection(usable, keyboard)) && keyboard.size.width >= usable.size.width * .5)
+                    availableBottom = MIN(availableBottom, CGRectGetMinY(keyboard));
+            }
+        }
+        wide = usable.size.width >= 720 && availableBottom - CGRectGetMinY(usable) >= 280;
+        for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
+            CGRect division = region.frame;
+            if (CGRectIsEmpty(CGRectIntersection(usable, division))) continue;
+            if (division.size.width > division.size.height) {
+                // Tabletop: visible channels above, conversation and controls below.
+                wide = NO;
+                if (responder) _segmentedControl.selectedSegmentIndex = 1;
+                foldedControls = _segmentedControl.selectedSegmentIndex == 0 && usable.size.width >= 360 &&
+                    CGRectGetMinY(division) - CGRectGetMinY(usable) >= 260 &&
+                    CGRectGetMaxY(usable) - CGRectGetMaxY(division) >= 260;
+            } else {
+                // Book: retain the same leading Server / trailing Messages hierarchy
+                // as the unfolded split. Voice controls stay with their server pane.
+                BOOL rtl = self.view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+                CGFloat leading = rtl ? CGRectGetMaxX(usable) - CGRectGetMaxX(division) : CGRectGetMinX(division) - CGRectGetMinX(usable);
+                CGFloat trailing = rtl ? CGRectGetMinX(division) - CGRectGetMinX(usable) : CGRectGetMaxX(usable) - CGRectGetMaxX(division);
+                bookLayout = leading >= 280 && trailing >= 320 && availableBottom - CGRectGetMinY(usable) >= 280;
+                wide = bookLayout;
+                if (!wide && responder) _segmentedControl.selectedSegmentIndex = 1;
+            }
+            break;
+        }
+    }
+#endif
+    if (wide == _showingBothPanes && foldedControls == _usingFoldedControls && bookLayout == _usingBookLayout &&
+        _segmentIndex == _segmentedControl.selectedSegmentIndex) return;
+    _updatingLayout = YES;
+    [MLAudio.sharedAudio setForceTransmit:NO];
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        _showingBothPanes = wide;
+        _usingFoldedControls = foldedControls;
+        _usingBookLayout = bookLayout;
+        if (wide) {
+            _conversationContainer.navigationItem.titleView = nil;
+            _conversationContainer.navigationItem.title = nil;
+        } else {
+            if (responder) _segmentedControl.selectedSegmentIndex = 1;
+            [self applyNavigationItemsToViewController:_conversationContainer];
+        }
+        if (wide || foldedControls || _segmentedControl.selectedSegmentIndex == 1) {
+            _unreadMessages = 0;
+            [self updateUnreadMessageCount];
+            [MUApplicationDelegate setApplicationBadgeCount:0];
+        }
+        _segmentIndex = _segmentedControl.selectedSegmentIndex;
+        [self updateNativeArrangement];
+    }
+#endif
+    _updatingLayout = NO;
+    if (responder) {
+        __weak UIView *weakResponder = responder;
+        dispatch_async(dispatch_get_main_queue(), ^{ if (weakResponder.window) [weakResponder becomeFirstResponder]; });
+    }
+}
+
+// Both children keep their placement for the lifetime of the connection. Collapsing
+// a placement through its native dimensions avoids a controller handoff during folds.
+- (void)updateNativeArrangement {
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        _secondaryView.showsVoiceControls = _usingFoldedControls;
+        _secondaryView.showsPaneTitle = _showingBothPanes;
+        _serverView.showsPaneTitle = _showingBothPanes;
+        BOOL splitPanes = _showingBothPanes || _usingFoldedControls;
+        UISplitArrangement *split = [UISplitArrangement splitArrangement];
+        split.axes = _usingFoldedControls ? UIAxisVertical : UIAxisHorizontal;
+        for (NSUInteger index = 0; index < 2; index++) {
+            BOOL visible = splitPanes || _segmentedControl.selectedSegmentIndex == index;
+            UISplitArrangementViewProperties *properties = [UISplitArrangementViewProperties new];
+            properties.layoutPriority = visible ? 1 : 0;
+            if (splitPanes) {
+                properties.width.minimum = [UISplitArrangementDimension absoluteDimension:index == 0 ? 280 : 320];
+                properties.height.minimum = [UISplitArrangementDimension absoluteDimension:240];
+                if (index == 0) properties.width.preferred = [UISplitArrangementDimension fractionalDimension:.42];
+            } else {
+                UISplitArrangementDimension *zero = [UISplitArrangementDimension absoluteDimension:0];
+                properties.width.minimum = zero;
+                properties.height.minimum = zero;
+                properties.width.preferred = visible ? [UISplitArrangementDimension fractionalDimension:1] : zero;
+                properties.height.preferred = visible ? [UISplitArrangementDimension fractionalDimension:1] : zero;
+                if (!visible) { properties.width.maximum = zero; properties.height.maximum = zero; }
+            }
+            [split setViewProperties:properties forPlacement:index == 0 ? UIArrangementViewControllerViewPlacementPrimary : UIArrangementViewControllerViewPlacementSecondary];
+        }
+        // A compact conversation above a horizontal fold still uses that axis.
+        if (!splitPanes) split.axes = UIAxisHorizontal | UIAxisVertical;
+        [(UIArrangementViewController *)_conversationContainer updateArrangement:split animated:NO];
+    }
+#endif
 }
 
 - (UIBarButtonItem *)barButtonWithImage:(UIImage *)image action:(SEL)action {
@@ -120,7 +368,15 @@
 - (void) applyNavigationItemsToViewController:(UIViewController *)controller {
     controller.navigationItem.titleView = _segmentedControl;
     controller.navigationItem.leftBarButtonItem = _disconnectButton;
-    controller.navigationItem.rightBarButtonItem = _menuButton;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        controller.navigationItem.rightBarButtonItem = nil;
+        controller.navigationItem.additionalOverflowItems = _menuActions;
+    } else
+#endif
+    {
+        controller.navigationItem.rightBarButtonItem = _menuButton;
+    }
 }
 
 - (void) disconnectButtonClicked:(id)sender {
@@ -143,12 +399,17 @@
 }
 
 - (void) segmentChanged:(id)sender {
-    if (_segmentedControl.selectedSegmentIndex == 0) { // Server view
-        [self applyNavigationItemsToViewController:_serverView];
-        [self setViewControllers:[NSArray arrayWithObject:_serverView] animated:NO];
-    } else if (_segmentedControl.selectedSegmentIndex == 1) { // Messages view
-        [self applyNavigationItemsToViewController:_messagesView];
-        [self setViewControllers:[NSArray arrayWithObject:_messagesView] animated:NO];
+    if (_showingBothPanes) return;
+    if (_segmentedControl.selectedSegmentIndex == 0) [_messagesView.viewIfLoaded endEditing:YES];
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        [self updateConversationLayout];
+    } else
+#endif
+    {
+        UIViewController *selected = _segmentedControl.selectedSegmentIndex == 1 ? _messagesView : _serverView;
+        [self applyNavigationItemsToViewController:selected];
+        [self setViewControllers:@[selected] animated:NO];
     }
     
     if (_segmentedControl.selectedSegmentIndex == 1) { // Messages view
@@ -235,58 +496,58 @@
 }
 
 - (void) serverModel:(MLServerModel *)model permissionDenied:(MLPermission)perm forUser:(MLUser *)user inChannel:(MLChannel *)channel {
-    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Permission denied", nil)];
+    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Permission denied", nil) fromViewController:self];
 }
 
 - (void) serverModelInvalidChannelNameError:(MLServerModel *)model {
-    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Invalid channel name", nil)];
+    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Invalid channel name", nil) fromViewController:self];
 }
 
 - (void) serverModelModifySuperUserError:(MLServerModel *)model {
-    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Cannot modify SuperUser", nil)];
+    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Cannot modify SuperUser", nil) fromViewController:self];
 }
 
 - (void) serverModelTextMessageTooLongError:(MLServerModel *)model {
-    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Message too long", nil)];
+    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Message too long", nil) fromViewController:self];
 }
 
 - (void) serverModelTemporaryChannelError:(MLServerModel *)model {
-    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Not permitted in temporary channel", nil)];
+    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Not permitted in temporary channel", nil) fromViewController:self];
 }
 
 - (void) serverModel:(MLServerModel *)model missingCertificateErrorForUser:(MLUser *)user {
     if (user == nil) {
-        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Missing certificate", nil)];
+        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Missing certificate", nil) fromViewController:self];
     } else {
-        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Missing certificate for user", nil)];
+        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Missing certificate for user", nil) fromViewController:self];
     }
 }
 
 - (void) serverModel:(MLServerModel *)model invalidUsernameErrorForName:(NSString *)name {
     if (name == nil) {
-        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Invalid username", nil)];
+        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Invalid username", nil) fromViewController:self];
     } else {
-        [[MUNotificationController sharedController] addNotification:[NSString stringWithFormat:NSLocalizedString(@"Invalid username: %@", nil), name]];
+        [[MUNotificationController sharedController] addNotification:[NSString stringWithFormat:NSLocalizedString(@"Invalid username: %@", nil), name] fromViewController:self];
     }
 }
 
 - (void) serverModelChannelFullError:(MLServerModel *)model {
-    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Channel is full", nil)];
+    [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Channel is full", nil) fromViewController:self];
 }
 
 - (void) serverModel:(MLServerModel *)model permissionDeniedForReason:(NSString *)reason {
     if (reason == nil) {
-        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Permission denied", nil)];
+        [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Permission denied", nil) fromViewController:self];
     } else {
         [[MUNotificationController sharedController] addNotification:[NSString stringWithFormat:
                                                                         NSLocalizedString(@"Permission denied: %@",
                                                                                           @"Permission denied with reason"),
-                                                                        reason]];
+                                                                        reason] fromViewController:self];
     }
 }
 
 - (void) serverModel:(MLServerModel *)model textMessageReceived:(MLTextMessage *)msg fromUser:(MLUser *)user {
-    if (_segmentedControl.selectedSegmentIndex != 1) { // When not in messages view
+    if (!_showingBothPanes && !_usingFoldedControls && _segmentedControl.selectedSegmentIndex != 1) { // When not in messages view
         _unreadMessages++;
         [self updateUnreadMessageCount];
     }
@@ -305,7 +566,7 @@
 
 - (NSArray<UIMenuElement *> *)serverMenuActions {
     MLUser *connUser = [_model connectedUser];
-    BOOL inMessagesView = self.viewControllers.firstObject == _messagesView;
+    BOOL inMessagesView = _showingBothPanes || _usingFoldedControls || _segmentedControl.selectedSegmentIndex == 1;
     __weak MUServerRootViewController *weakSelf = self;
     NSMutableArray<UIMenuElement *> *actions = [NSMutableArray array];
     NSArray<NSString *> *methods = @[@"vad", @"ptt", @"continuous"];
@@ -336,7 +597,7 @@
         [controller presentViewController:navCtrl animated:YES completion:nil];
     }]];
     
-    if (!inMessagesView) {
+    if (_showingBothPanes || _usingFoldedControls || !inMessagesView) {
         [actions addObject:[UIAction actionWithTitle:NSLocalizedString(@"Certificates", nil) image:[UIImage systemImageNamed:@"checkmark.seal"] identifier:nil handler:^(UIAction *action) {
             MUServerRootViewController *controller = weakSelf;
             if (!controller) return;

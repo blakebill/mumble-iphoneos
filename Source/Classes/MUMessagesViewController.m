@@ -35,11 +35,14 @@
     BOOL                     _loadingPhoto, _preparingPhoto;
     NSUInteger               _photoGeneration;
     NSLayoutConstraint       *_textViewTop;
+    NSLayoutConstraint       *_textViewLeading, *_photoPreviewWidth, *_photoPreviewHeight;
     UIView                   *_inputContainer;
     UIButton                 *_sendButton;
     UIButton                 *_recipientButton;
     NSLayoutConstraint       *_recipientHeight;
     NSLayoutConstraint       *_composerHeight;
+    NSLayoutConstraint       *_keyboardBottom;
+    __weak UIView            *_keyboardHost;
     NSString                 *_receiverName;
     MUMessagesDatabase       *_msgdb;
 
@@ -176,20 +179,33 @@
 
     for (UIView *view in @[_tableView, _textBarView, _recipientButton, _attachmentButton, _inputContainer, _textView, _placeholderLabel, _sendButton, _photoPreview, _removePhotoButton]) view.translatesAutoresizingMaskIntoConstraints = NO;
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    self.view.keyboardLayoutGuide.followsUndockedKeyboard = YES;
     _composerHeight = [_textBarView.heightAnchor constraintEqualToConstant:78];
     _recipientHeight = [_recipientButton.heightAnchor constraintEqualToConstant:44];
     _textViewTop = [_textView.topAnchor constraintEqualToAnchor:_inputContainer.topAnchor];
-    NSLayoutConstraint *keyboardBottom = [_textBarView.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor];
-    keyboardBottom.priority = 999;
+    _textViewLeading = [_textView.leadingAnchor constraintEqualToAnchor:_inputContainer.leadingAnchor constant:14];
+    _photoPreviewWidth = [_photoPreview.widthAnchor constraintEqualToConstant:96];
+    _photoPreviewHeight = [_photoPreview.heightAnchor constraintEqualToConstant:96];
+    _keyboardHost = self.view;
+    _keyboardBottom = [_textBarView.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor];
+    _keyboardBottom.priority = 999;
+    NSLayoutConstraint *composerWidth = [_textBarView.widthAnchor constraintEqualToAnchor:safe.widthAnchor];
+    composerWidth.priority = UILayoutPriorityDefaultHigh;
+    composerWidth.active = YES;
     [NSLayoutConstraint activateConstraints:@[
         [_tableView.topAnchor constraintEqualToAnchor:safe.topAnchor],
         [_tableView.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
         [_tableView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
         // The history continues behind the floating glass instead of ending at an opaque strip.
         [_tableView.bottomAnchor constraintEqualToAnchor:_textBarView.bottomAnchor],
-        [_textBarView.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
-        [_textBarView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
-        keyboardBottom,
+        [_textBarView.leadingAnchor constraintGreaterThanOrEqualToAnchor:safe.leadingAnchor],
+        [_textBarView.trailingAnchor constraintLessThanOrEqualToAnchor:safe.trailingAnchor],
+        [_textBarView.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor],
+        [_textBarView.widthAnchor constraintLessThanOrEqualToConstant:720],
+        _keyboardBottom,
+        // A folded arrangement may place the conversation above the division
+        // while its enclosing keyboard guide remains on the lower display.
+        [_textBarView.bottomAnchor constraintLessThanOrEqualToAnchor:safe.bottomAnchor],
         [_textBarView.topAnchor constraintGreaterThanOrEqualToAnchor:safe.topAnchor],
         _composerHeight,
         _recipientHeight,
@@ -208,7 +224,7 @@
         [_sendButton.bottomAnchor constraintEqualToAnchor:_textBarView.bottomAnchor constant:-9],
         [_sendButton.widthAnchor constraintEqualToConstant:44],
         [_sendButton.heightAnchor constraintEqualToConstant:44],
-        [_textView.leadingAnchor constraintEqualToAnchor:_inputContainer.leadingAnchor constant:14],
+        _textViewLeading,
         [_textView.trailingAnchor constraintEqualToAnchor:_inputContainer.trailingAnchor constant:-14],
         _textViewTop,
         [_textView.bottomAnchor constraintEqualToAnchor:_inputContainer.bottomAnchor],
@@ -217,8 +233,8 @@
         [_placeholderLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_textView.trailingAnchor],
         [_photoPreview.leadingAnchor constraintEqualToAnchor:_inputContainer.leadingAnchor constant:12],
         [_photoPreview.topAnchor constraintEqualToAnchor:_inputContainer.topAnchor constant:10],
-        [_photoPreview.widthAnchor constraintEqualToConstant:96],
-        [_photoPreview.heightAnchor constraintEqualToConstant:96],
+        _photoPreviewWidth,
+        _photoPreviewHeight,
         [_removePhotoButton.centerXAnchor constraintEqualToAnchor:_photoPreview.trailingAnchor constant:-14],
         [_removePhotoButton.centerYAnchor constraintEqualToAnchor:_photoPreview.topAnchor constant:14],
         [_removePhotoButton.widthAnchor constraintEqualToConstant:44],
@@ -244,15 +260,28 @@
 }
 
 - (void)updateComposerHeight {
-    CGFloat width = CGRectGetWidth(_textView.bounds);
-    if (width < 1) width = MAX(100, CGRectGetWidth(self.view.bounds) - 150);
-    CGFloat measured = ceil([_textView sizeThatFits:CGSizeMake(width, CGFLOAT_MAX)].height);
     CGFloat minimum = MAX(46, ceil(_textView.font.lineHeight) + 22);
+    CGFloat available = CGFLOAT_MAX;
+    if (self.view.window && !CGRectIsEmpty(self.view.bounds)) {
+        UIView *host = _keyboardHost ?: self.view;
+        CGRect keyboard = [host convertRect:host.keyboardLayoutGuide.layoutFrame toView:self.view];
+        CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
+        available = MAX(0, MIN(CGRectGetMaxY(safe), CGRectGetMinY(keyboard)) - CGRectGetMinY(safe));
+    }
+    CGFloat fixedHeight = _recipientHeight.constant + 17;
+    BOOL inlinePhoto = _pendingPhoto && available < minimum + 114 + fixedHeight;
+    _textViewLeading.constant = inlinePhoto ? 78 : 14;
+    _textViewTop.constant = _pendingPhoto && !inlinePhoto ? 114 : 0;
+    _photoPreviewWidth.constant = _photoPreviewHeight.constant = inlinePhoto ? 44 : 96;
+    if (inlinePhoto) minimum = MAX(minimum, 64);
+    CGFloat width = _inputContainer.bounds.size.width - _textViewLeading.constant - 14;
+    if (width < 1) width = MAX(100, self.view.bounds.size.width - 150 - (_textViewLeading.constant - 14));
+    CGFloat measured = ceil([_textView sizeThatFits:CGSizeMake(width, CGFLOAT_MAX)].height);
     CGFloat maximum = MAX(minimum, MIN(160, ceil(_textView.font.lineHeight * 5) + 22));
     CGFloat textHeight = MAX(minimum, MIN(maximum, measured));
-    _textView.scrollEnabled = measured > maximum;
-    _textViewTop.constant = _pendingPhoto ? 114 : 0;
-    _composerHeight.constant = textHeight + _textViewTop.constant + _recipientHeight.constant + 17;
+    if (available > 0) textHeight = MAX(44, MIN(textHeight, available - fixedHeight - _textViewTop.constant));
+    _textView.scrollEnabled = measured > textHeight;
+    _composerHeight.constant = textHeight + _textViewTop.constant + fixedHeight;
 }
 
 - (void)textViewDidChange:(UITextView *)textView {
@@ -299,12 +328,33 @@
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    // Native split panes can retain the previous keyboard geometry after a fold.
+    // The enclosing navigation controller has the current scene's keyboard guide.
+    UIView *keyboardHost = self.navigationController.view ?: self.view;
+    if ([self.view isDescendantOfView:keyboardHost] && (_keyboardHost != keyboardHost || !_keyboardBottom.active)) {
+        _keyboardBottom.active = NO;
+        _keyboardHost = keyboardHost;
+        keyboardHost.keyboardLayoutGuide.followsUndockedKeyboard = YES;
+        _keyboardBottom = [_textBarView.bottomAnchor constraintEqualToAnchor:keyboardHost.keyboardLayoutGuide.topAnchor];
+        _keyboardBottom.priority = 999;
+        _keyboardBottom.active = YES;
+    }
     [self updateComposerHeight];
     CGFloat width = CGRectGetWidth(_tableView.bounds) - _tableView.safeAreaInsets.left - _tableView.safeAreaInsets.right;
     if (width > 0 && width != _messageLayoutWidth) {
+        BOOL atBottom = _tableView.contentOffset.y >= [self bottomMessageOffset].y - 80;
+        NSIndexPath *anchor = _tableView.indexPathsForVisibleRows.firstObject;
+        CGFloat distance = anchor ? _tableView.contentOffset.y - [_tableView rectForRowAtIndexPath:anchor].origin.y : 0;
         _messageLayoutWidth = width;
         [_messageHeights removeAllObjects];
         [_tableView reloadData];
+        [_tableView layoutIfNeeded];
+        if (atBottom) [_tableView setContentOffset:[self bottomMessageOffset] animated:NO];
+        else if (anchor && anchor.row < [_tableView numberOfRowsInSection:0]) {
+            CGFloat offset = [_tableView rectForRowAtIndexPath:anchor].origin.y + distance;
+            offset = MIN([self bottomMessageOffset].y, MAX(-_tableView.adjustedContentInset.top, offset));
+            [_tableView setContentOffset:CGPointMake(0, offset) animated:NO];
+        }
     }
     CGFloat height = _tableView.bounds.size.height;
     CGFloat composerInset = _textBarView.bounds.size.height + 8;
@@ -563,7 +613,7 @@
 }
 
 - (void)appendLastMessageSentBySelf:(BOOL)sentBySelf {
-    if (!_tableView || !self.view.window) { [_tableView reloadData]; return; }
+    if (!_tableView || !self.view.window || CGRectIsEmpty(self.view.bounds)) { [_tableView reloadData]; return; }
     BOOL follow = sentBySelf || (!_tableView.isDragging && !_tableView.isDecelerating && ![self editMenuIsVisible] &&
                                 _tableView.contentOffset.y >= [self bottomMessageOffset].y - 80);
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:_msgdb.count - 1 inSection:0];

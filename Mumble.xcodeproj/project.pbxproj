@@ -56,7 +56,6 @@
 		2861C27C116BE905002B8514 /* MUPublicServerListController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2861C269116BE905002B8514 /* MUPublicServerListController.m */; };
 		2861C281116BE905002B8514 /* MUWelcomeScreenPhone.m in Sources */ = {isa = PBXBuildFile; fileRef = 2861C271116BE905002B8514 /* MUWelcomeScreenPhone.m */; };
 		286A3CA0158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 286A3C9F158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.m */; };
-		286A3CA4158CCF9F00C817D1 /* MUWelcomeScreenPad.m in Sources */ = {isa = PBXBuildFile; fileRef = 286A3CA2158CCF9D00C817D1 /* MUWelcomeScreenPad.m */; };
 		286E9260148452A000B13593 /* MUVoiceActivitySetupViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 286E925F148452A000B13593 /* MUVoiceActivitySetupViewController.m */; };
 		287639F911D29D99009DB8B6 /* MUCertificateCreationProgressView.m in Sources */ = {isa = PBXBuildFile; fileRef = 287639F811D29D99009DB8B6 /* MUCertificateCreationProgressView.m */; };
 		2879523714BF519A00567430 /* PBXBuildFile */ = {
@@ -259,8 +258,6 @@
 		2861C2AD116BE9B5002B8514 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		286A3C9E158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUAudioSidetonePreferencesViewController.h; sourceTree = "<group>"; };
 		286A3C9F158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUAudioSidetonePreferencesViewController.m; sourceTree = "<group>"; };
-		286A3CA1158CCF9D00C817D1 /* MUWelcomeScreenPad.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUWelcomeScreenPad.h; sourceTree = "<group>"; };
-		286A3CA2158CCF9D00C817D1 /* MUWelcomeScreenPad.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUWelcomeScreenPad.m; sourceTree = "<group>"; };
 		286E925E148452A000B13593 /* MUVoiceActivitySetupViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUVoiceActivitySetupViewController.h; sourceTree = "<group>"; };
 		286E925F148452A000B13593 /* MUVoiceActivitySetupViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUVoiceActivitySetupViewController.m; sourceTree = "<group>"; };
 		287639F711D29D99009DB8B6 /* MUCertificateCreationProgressView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUCertificateCreationProgressView.h; sourceTree = "<group>"; };
@@ -397,8 +394,6 @@
 				2861C269116BE905002B8514,
 				2861C270116BE905002B8514,
 				2861C271116BE905002B8514,
-				286A3CA1158CCF9D00C817D1,
-				286A3CA2158CCF9D00C817D1,
 				287BA33E11B97EEE0010E031,
 				287BA33F11B97EEE0010E031,
 				287BA3A411B996D90010E031,
@@ -815,7 +810,6 @@
 				28EF155D14D8738C008A35A4,
 				2836767D1525053A0015958E,
 				286A3CA0158BB17E00C817D1,
-				286A3CA4158CCF9F00C817D1,
 				285D6B7116BEEFA700F239EB,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
