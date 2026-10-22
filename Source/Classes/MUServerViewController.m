@@ -63,6 +63,10 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     NSMutableDictionary              *_userIndexMap;
     NSMutableDictionary              *_channelIndexMap;
     BOOL                             _pttState;
+    BOOL                             _viewIsVisible;
+    CGSize                           _lastPaneSize;
+    CGSize                           _lastVoiceHostSize;
+    __weak UIView                    *_voiceControlsHostView;
     UIButton                         *_talkButton;
     UIStackView                      *_muteControls;
     UIButton                         *_microphoneButton, *_speakerButton;
@@ -70,7 +74,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     UIVisualEffectView               *_voiceDock;
     UILabel                         *_voiceStatusLabel;
     UIView                          *_channelHeader;
-    UILabel                         *_serverNameLabel, *_channelTitleLabel, *_channelMetaLabel;
+    UILabel                         *_paneTitleLabel, *_serverNameLabel, *_channelTitleLabel, *_channelMetaLabel;
     NSInteger                       _maximumIndent;
     BOOL                            _modelRefreshScheduled;
 }
@@ -79,10 +83,12 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 - (void) rebuildModelArrayFromChannel:(MLChannel *)channel;
 - (void) addChannelTreeToModel:(MLChannel *)channel indentLevel:(NSInteger)indentLevel;
 - (void)scheduleModelRefresh;
+- (BOOL)hasVisibleChannelPane;
 - (void)configureCell:(MUServerTableViewCell *)cell item:(MUChannelNavigationItem *)item;
 @end
 
 @implementation MUServerViewController
+@synthesize voiceControlsHostView = _voiceControlsHostView;
 
 #pragma mark -
 #pragma mark Initialization and lifecycle
@@ -107,23 +113,27 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     self.tableView.estimatedRowHeight = 56;
     self.tableView.selfSizingInvalidation = UITableViewSelfSizingInvalidationEnabledIncludingConstraints;
     _channelHeader = [UIView new];
+    _paneTitleLabel = [UILabel new];
+    _paneTitleLabel.text = NSLocalizedString(@"Server", nil);
+    _paneTitleLabel.accessibilityTraits = UIAccessibilityTraitHeader;
+    _paneTitleLabel.hidden = !_showsPaneTitle;
     _serverNameLabel = [UILabel new];
     _channelTitleLabel = [UILabel new];
     _channelMetaLabel = [UILabel new];
-    for (UILabel *label in @[_serverNameLabel, _channelTitleLabel, _channelMetaLabel]) {
+    for (UILabel *label in @[_paneTitleLabel, _serverNameLabel, _channelTitleLabel, _channelMetaLabel]) {
         label.adjustsFontForContentSizeCategory = YES;
         [_channelHeader addSubview:label];
     }
-    UIStackView *summary = [[UIStackView alloc] initWithArrangedSubviews:@[_serverNameLabel, _channelTitleLabel, _channelMetaLabel]];
+    UIStackView *summary = [[UIStackView alloc] initWithArrangedSubviews:@[_paneTitleLabel, _serverNameLabel, _channelTitleLabel, _channelMetaLabel]];
     summary.axis = UILayoutConstraintAxisVertical; summary.spacing = 6; summary.translatesAutoresizingMaskIntoConstraints = NO;
     [_channelHeader addSubview:summary];
-    for (UILabel *label in @[_serverNameLabel, _channelTitleLabel, _channelMetaLabel]) label.numberOfLines = 0;
+    for (UILabel *label in @[_paneTitleLabel, _serverNameLabel, _channelTitleLabel, _channelMetaLabel]) label.numberOfLines = 0;
     NSLayoutConstraint *summaryBottom = [summary.bottomAnchor constraintEqualToAnchor:_channelHeader.bottomAnchor constant:-16];
     // UITableView may temporarily impose a zero header height during updates.
     // Its encapsulated size takes precedence until the header is measured.
     summaryBottom.priority = UILayoutPriorityRequired - 1;
     [NSLayoutConstraint activateConstraints:@[
-        [summary.leadingAnchor constraintEqualToAnchor:_channelHeader.leadingAnchor constant:20], [summary.trailingAnchor constraintEqualToAnchor:_channelHeader.trailingAnchor constant:-20],
+        [summary.leadingAnchor constraintEqualToAnchor:_channelHeader.safeAreaLayoutGuide.leadingAnchor constant:20], [summary.trailingAnchor constraintEqualToAnchor:_channelHeader.safeAreaLayoutGuide.trailingAnchor constant:-20],
         [summary.topAnchor constraintEqualToAnchor:_channelHeader.topAnchor constant:16], summaryBottom
     ]];
     [self updateChannelSummary];
@@ -145,16 +155,26 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    [self installVoiceDock];
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(appDidEnterBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+    _viewIsVisible = YES;
+    [self layoutVoiceControls];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(appDidEnterBackground:) name:UISceneWillDeactivateNotification object:self.view.window.windowScene];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(audioSettingsUpdated:) name:MLAudioDidRestartNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(audioSettingsUpdated:) name:MUAudioTransmissionModeDidChangeNotification object:nil];
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    // Resizing can cancel a touch without delivering its old control's release event.
+    CGSize size = self.view.bounds.size;
+    if (!CGSizeEqualToSize(size, _lastPaneSize)) {
+        BOOL wasCollapsed = _lastPaneSize.width < 1 || _lastPaneSize.height < 1;
+        _lastPaneSize = size;
+        if (_pttState) [self talkOff:_talkButton];
+        if (wasCollapsed && _viewIsVisible) [self scheduleModelRefresh];
+    }
+    [self layoutVoiceControls];
     [self resizeChannelHeader];
-    CGFloat bottom = _voiceDock ? ceil(_voiceDock.bounds.size.height) + 24 : 0;
+    CGFloat bottom = _voiceDock && !_voiceControlsHostView ? ceil(_voiceDock.bounds.size.height) + 24 : 0;
     if (self.tableView.contentInset.bottom != bottom) {
         UIEdgeInsets insets = self.tableView.contentInset;
         insets.bottom = bottom;
@@ -168,9 +188,15 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     if (width < 1) return;
     // Measure native labels independently of UITableView's current header
     // height; an encapsulated height of zero must not become the fitting result.
-    CGFloat height = 32 + 12; // Vertical margins and two stack spacings.
-    for (UILabel *label in @[_serverNameLabel, _channelTitleLabel, _channelMetaLabel])
-        height += ceil([label sizeThatFits:CGSizeMake(MAX(1, width - 40), CGFLOAT_MAX)].height);
+    CGFloat contentWidth = MAX(1, width - _channelHeader.safeAreaInsets.left - _channelHeader.safeAreaInsets.right - 40);
+    CGFloat height = 32;
+    NSUInteger visibleLabels = 0;
+    for (UILabel *label in @[_paneTitleLabel, _serverNameLabel, _channelTitleLabel, _channelMetaLabel]) {
+        if (label.hidden) continue;
+        visibleLabels++;
+        height += ceil([label sizeThatFits:CGSizeMake(contentWidth, CGFLOAT_MAX)].height);
+    }
+    if (visibleLabels > 1) height += (visibleLabels - 1) * 6;
     CGRect frame = CGRectMake(0, 0, width, height);
     BOOL changed = !CGRectEqualToRect(_channelHeader.frame, frame);
     if (changed) _channelHeader.frame = frame;
@@ -178,8 +204,16 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
         self.tableView.tableHeaderView = _channelHeader;
 }
 
+- (void)setShowsPaneTitle:(BOOL)showsPaneTitle {
+    if (_showsPaneTitle == showsPaneTitle) return;
+    _showsPaneTitle = showsPaneTitle;
+    _paneTitleLabel.hidden = !showsPaneTitle;
+    [self.viewIfLoaded setNeedsLayout];
+}
+
 - (void)updateChannelSummary {
     if (!self.isViewLoaded) return;
+    _paneTitleLabel.font = MUServerFont(UIFontTextStyleTitle2, NO, self.traitCollection);
     MLChannel *channel = _serverModel.connectedUser.channel ?: _serverModel.rootChannel;
     _serverNameLabel.text = _serverModel.hostname.length ? _serverModel.hostname : NSLocalizedString(@"Current Channel", nil);
     _serverNameLabel.font = MUServerFont(UIFontTextStyleCaption1, NO, self.traitCollection);
@@ -202,8 +236,36 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     }
 }
 
+- (void)setVoiceControlsHostView:(UIView *)host {
+    if (_voiceControlsHostView == host) return;
+    [self removeVoiceDock];
+    _voiceControlsHostView = host;
+    [self layoutVoiceControls];
+    [self.viewIfLoaded setNeedsLayout];
+}
+
+- (void)layoutVoiceControls {
+    UIView *host = _voiceControlsHostView ?: self.viewIfLoaded.superview;
+    if (!_viewIsVisible || ![self hasVisibleChannelPane] || CGRectIsEmpty(host.bounds)) {
+        if (_voiceDock) [self removeVoiceDock];
+        return;
+    }
+    if (!CGSizeEqualToSize(host.bounds.size, _lastVoiceHostSize)) {
+        _lastVoiceHostSize = host.bounds.size;
+        if (_pttState) [self talkOff:_talkButton];
+    }
+    if (_voiceDock && _voiceDock.superview != host) [self removeVoiceDock];
+    if (!_voiceDock) [self installVoiceDock];
+}
+
+- (CGFloat)voiceControlsContentHeight {
+    if (!_voiceDock) return 0;
+    return ceil([_voiceDock systemLayoutSizeFittingSize:UILayoutFittingCompressedSize].height);
+}
+
 - (void)installVoiceDock {
-    if (_voiceDock || !self.view.window) return;
+    UIView *host = _voiceControlsHostView ?: self.view.superview;
+    if (_voiceDock || !self.view.window || CGRectIsEmpty(self.view.bounds) || CGRectIsEmpty(host.bounds)) return;
     UIVisualEffect *effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterial];
     BOOL supportsGlass = NO;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
@@ -307,30 +369,41 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
         _muteControls.spacing = 8;
         [stack addArrangedSubview:_muteControls];
     }
-    UIWindow *window = self.view.window;
-    [window addSubview:_voiceDock];
+    [host addSubview:_voiceDock];
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
     if (@available(iOS 26.0, *)) {
-        // Include both the glass controls and their external text labels in the
-        // system's scroll-edge treatment, so dense rows fade behind the dock.
-        UIScrollEdgeElementContainerInteraction *edge = [UIScrollEdgeElementContainerInteraction new];
-        edge.scrollView = self.tableView;
-        edge.edge = UIRectEdgeBottom;
-        [_voiceDock addInteraction:edge];
-        self.tableView.bottomEdgeEffect.style = UIScrollEdgeEffectStyle.softStyle;
+        if (!_voiceControlsHostView) {
+            // Include the controls and labels in the channel pane's scroll edge.
+            UIScrollEdgeElementContainerInteraction *edge = [UIScrollEdgeElementContainerInteraction new];
+            edge.scrollView = self.tableView;
+            edge.edge = UIRectEdgeBottom;
+            [_voiceDock addInteraction:edge];
+            self.tableView.bottomEdgeEffect.style = UIScrollEdgeEffectStyle.softStyle;
+        }
     }
 #endif
     if (pushToTalk) {
+        NSLayoutConstraint *fill = [_voiceDock.widthAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.widthAnchor constant:-32];
+        fill.priority = UILayoutPriorityDefaultHigh;
+        fill.active = YES;
         [NSLayoutConstraint activateConstraints:@[
-            [_voiceDock.leadingAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.leadingAnchor constant:16],
-            [_voiceDock.trailingAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.trailingAnchor constant:-16]
+            [_voiceDock.widthAnchor constraintLessThanOrEqualToConstant:600]
         ]];
     }
+    if (_voiceControlsHostView) {
+        [NSLayoutConstraint activateConstraints:@[
+            [_voiceDock.centerYAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.centerYAnchor],
+            [_voiceDock.topAnchor constraintGreaterThanOrEqualToAnchor:host.safeAreaLayoutGuide.topAnchor constant:12],
+            [_voiceDock.bottomAnchor constraintLessThanOrEqualToAnchor:host.safeAreaLayoutGuide.bottomAnchor constant:-12]
+        ]];
+    } else {
+        [_speakerButton.bottomAnchor constraintEqualToAnchor:host.keyboardLayoutGuide.topAnchor constant:-MAX(40, ceil(MUServerFont(UIFontTextStyleCaption2, NO, self.traitCollection).lineHeight) + 24)].active = YES;
+        [_voiceDock.bottomAnchor constraintLessThanOrEqualToAnchor:host.keyboardLayoutGuide.topAnchor constant:-8].active = YES;
+    }
     [NSLayoutConstraint activateConstraints:@[
-        [_voiceDock.centerXAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.centerXAnchor],
-        // Anchor the actual button. The labels below the mute buttons must
-        // not move those buttons up relative to the push-to-talk controls.
-        [_speakerButton.bottomAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.bottomAnchor constant:-MAX(22, ceil(MUServerFont(UIFontTextStyleCaption2, NO, self.traitCollection).lineHeight) + 9)],
+        [_voiceDock.centerXAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.centerXAnchor],
+        [_voiceDock.leadingAnchor constraintGreaterThanOrEqualToAnchor:host.safeAreaLayoutGuide.leadingAnchor constant:16],
+        [_voiceDock.trailingAnchor constraintLessThanOrEqualToAnchor:host.safeAreaLayoutGuide.trailingAnchor constant:-16],
         [stack.leadingAnchor constraintEqualToAnchor:_voiceDock.contentView.leadingAnchor constant:10],
         [stack.trailingAnchor constraintEqualToAnchor:_voiceDock.contentView.trailingAnchor constant:-10],
         [stack.topAnchor constraintEqualToAnchor:_voiceDock.contentView.topAnchor constant:10],
@@ -348,6 +421,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     ]];
     [self updateMuteControls];
     [self.view setNeedsLayout];
+    if (_voiceControlsHostView) [_voiceControlsHostView.superview setNeedsLayout];
 }
 
 - (void)removeVoiceDock {
@@ -360,6 +434,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    _viewIsVisible = NO;
     _modelRefreshScheduled = NO;
     [self removeVoiceDock];
     UIEdgeInsets insets = self.tableView.contentInset; insets.bottom = 0;
@@ -369,7 +444,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 }
 
 - (void)audioSettingsUpdated:(NSNotification *)notification {
-    if (!self.view.window) return;
+    if (![self hasVisibleChannelPane]) return;
     [self removeVoiceDock];
     [self installVoiceDock];
     [self updateChannelSummary];
@@ -381,8 +456,11 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     UIFont *font = MUServerFont(UIFontTextStyleCaption2, NO, self.traitCollection);
     CGFloat width = MAX(96, ceil(MAX([NSLocalizedString(@"Mic", nil) sizeWithAttributes:@{NSFontAttributeName:font}].width, [NSLocalizedString(@"Audio", nil) sizeWithAttributes:@{NSFontAttributeName:font}].width)) + 24);
+    NSLayoutConstraint *preferredWidth = [button.widthAnchor constraintEqualToConstant:width];
+    preferredWidth.priority = UILayoutPriorityDefaultHigh;
     [NSLayoutConstraint activateConstraints:@[
-        [button.widthAnchor constraintEqualToConstant:MIN(width, (self.view.window.bounds.size.width - 40) / 2)],
+        preferredWidth,
+        [button.widthAnchor constraintGreaterThanOrEqualToConstant:44],
         [button.heightAnchor constraintEqualToConstant:64]
     ]];
     return button;
@@ -485,7 +563,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 
 - (void) reloadUser:(MLUser *)user {
     if (user == _serverModel.connectedUser) [self updateMuteControls];
-    if (!self.isViewLoaded || !self.view.window) return;
+    if (![self hasVisibleChannelPane]) return;
     NSInteger userIndex = [self indexForUser:user];
     if (userIndex != NSNotFound) {
         MUServerTableViewCell *cell = (id)[self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:userIndex inSection:0]];
@@ -493,18 +571,23 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     }
 }
 
+- (BOOL)hasVisibleChannelPane {
+    UIView *view = self.viewIfLoaded;
+    return view.window && !CGRectIsEmpty(view.bounds);
+}
+
 - (void)scheduleModelRefresh {
     // Initial protocol events arrive before this controller is presented and
     // may change several tree rows at once. Do not create a table for them or
     // infer insert/delete counts from individual callbacks.
-    if (!self.isViewLoaded || !self.view.window || _modelRefreshScheduled) return;
+    if (![self hasVisibleChannelPane] || _modelRefreshScheduled) return;
     _modelRefreshScheduled = YES;
     __weak MUServerViewController *weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
         MUServerViewController *controller = weakSelf;
         if (!controller || !controller->_modelRefreshScheduled) return;
         controller->_modelRefreshScheduled = NO;
-        if (!controller.isViewLoaded || !controller.view.window) return;
+        if (![controller hasVisibleChannelPane]) return;
         [controller rebuildModelArrayFromChannel:controller->_serverModel.rootChannel];
         [controller.tableView reloadData];
         [controller updateMuteControls];
@@ -691,7 +774,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 }
 
 - (void)serverModel:(MLServerModel *)model userTalkStateChanged:(MLUser *)user {
-    if (!self.isViewLoaded || !self.view.window) return;
+    if (![self hasVisibleChannelPane]) return;
     if (user == model.connectedUser) [self updateMuteControls];
     NSInteger row = [self indexForUser:user];
     if (row == NSNotFound) return;

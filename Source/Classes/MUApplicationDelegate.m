@@ -5,7 +5,6 @@
 #import "MUApplicationDelegate.h"
 
 #import "MUWelcomeScreenPhone.h"
-#import "MUWelcomeScreenPad.h"
 #import "MUAppMenuViewController.h"
 #import "MUOnboardingViewController.h"
 #import "MUDatabase.h"
@@ -87,8 +86,7 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
 - (void) installUserInterfaceInWindow:(UIWindow *)window {
     _window = window;
 
-    UIUserInterfaceIdiom idiom = [[UIDevice currentDevice] userInterfaceIdiom];
-    UIViewController *welcomeScreen = idiom == UIUserInterfaceIdiomPad ? [MUWelcomeScreenPad new] : [MUWelcomeScreenPhone new];
+    UIViewController *welcomeScreen = [MUWelcomeScreenPhone new];
     _navigationController = [[UINavigationController alloc] initWithRootViewController:welcomeScreen];
     _navigationController.navigationBar.prefersLargeTitles = YES;
     _navigationController.tabBarItem = [[UITabBarItem alloc] initWithTitle:NSLocalizedString(@"Home", nil)

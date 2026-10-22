@@ -10,32 +10,12 @@
 
 #import "MLClient.h"
 
-static UIViewController *MUFrontmostViewController(void) {
-    UIWindow *window = nil;
-    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        if (![scene isKindOfClass:[UIWindowScene class]]) {
-            continue;
-        }
-        for (UIWindow *candidate in ((UIWindowScene *)scene).windows) {
-            if (candidate.isKeyWindow) {
-                window = candidate;
-                break;
-            }
-        }
-    }
-    UIViewController *controller = window.rootViewController;
-    while (controller.presentedViewController != nil) {
-        controller = controller.presentedViewController;
-    }
-    return controller;
-}
-
-static void ShowAlertDialog(NSString *title, NSString *msg) {
+static void ShowAlertDialog(UIViewController *presenter, NSString *title, NSString *msg) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSString *ok = NSLocalizedString(@"OK", nil);
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:ok style:UIAlertActionStyleCancel handler:nil]];
-        [MUFrontmostViewController() presentViewController:alert animated:YES completion:nil];
+        [presenter presentViewController:alert animated:YES completion:nil];
     });
 }
 
@@ -303,7 +283,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
                 } else if (self.navigationController.presentingViewController) {
                     // Keep the form available for correction/retry.
                     [[self navigationController] popToViewController:self animated:NO];
-                    ShowAlertDialog(failureTitle ?: NSLocalizedString(@"Import Error", nil), failureMessage ?: NSLocalizedString(@"Mumble was unable to save the certificate.", nil));
+                    ShowAlertDialog(self, failureTitle ?: NSLocalizedString(@"Import Error", nil), failureMessage ?: NSLocalizedString(@"Mumble was unable to save the certificate.", nil));
                 }
             };
             id<UIViewControllerTransitionCoordinator> transition = self.navigationController.transitionCoordinator;

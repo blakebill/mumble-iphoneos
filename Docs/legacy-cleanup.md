@@ -25,7 +25,7 @@ The project lost 68 obsolete objects. All 264 remaining objects are reachable fr
 - Audio-session and interface API branches for iOS 18–26.
 - Older Mumble servers' Opus packet format, public-server ping format, and TCP voice fallback.
 - Existing databases, favourites, settings, and certificate identities, including migration of old codec preferences to Opus.
-- Active message HTML/data-URL processing, the public-server offline snapshot, and the iPad compatibility entry point.
+- Active message HTML/data-URL processing and the public-server offline snapshot. The orientation-only iPad entry point was later removed by the [iPhone Duo adaptation](iphone-duo.md), which shares the adaptive Home implementation across window sizes.
 - The pinned libmumble source snapshot and licenses. Existing FMDB integration changes are replayed through the checked-in patch rather than resetting the submodule's working contents.
 
 ## Repeatable checks

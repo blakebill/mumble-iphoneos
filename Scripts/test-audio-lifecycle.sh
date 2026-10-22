@@ -1,13 +1,14 @@
 #!/bin/bash
 # Run deterministic lifecycle tests against MLAudio in a built iOS 27 Simulator app.
 set -euo pipefail
+validation_device="${MU_TEST_DEVICE:-booted}"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 app_path="${1:?Usage: bash Scripts/test-audio-lifecycle.sh /path/to/Simulator/Mumble.app}"
 test_mode="${2:-async}"
 [[ "$test_mode" == async || "$test_mode" == legacy ]] || { printf 'Mode must be async or legacy\n' >&2; exit 1; }
 validation_dir="$(mktemp -d "${TMPDIR:-/tmp}/mumble-audio-tests.XXXXXX")"
 validation_bundle="com.blakebill.mumble.audio-lifecycle-tests"
-trap 'xcrun simctl terminate booted "$validation_bundle" >/dev/null 2>&1 || true' EXIT
+trap 'xcrun simctl terminate "$validation_device" "$validation_bundle" >/dev/null 2>&1 || true' EXIT
 xcrun --sdk iphonesimulator clang -arch arm64 -mios-simulator-version-min=27.0 \
     -std=c++20 -fobjc-arc -dynamiclib -undefined dynamic_lookup \
     -framework UIKit -framework Foundation -framework AVFoundation \
@@ -25,14 +26,14 @@ info['CFBundleDisplayName'] = 'Mumble Audio Tests'
 info.pop('CFBundleURLTypes', None)
 path.write_bytes(plistlib.dumps(info))
 PY
-xcrun simctl terminate booted "$validation_bundle" >/dev/null 2>&1 || true
-xcrun simctl install booted "$validation_dir/Mumble.app"
-container_path="$(xcrun simctl get_app_container booted "$validation_bundle" data)"
+xcrun simctl terminate "$validation_device" "$validation_bundle" >/dev/null 2>&1 || true
+xcrun simctl install "$validation_device" "$validation_dir/Mumble.app"
+container_path="$(xcrun simctl get_app_container "$validation_device" "$validation_bundle" data)"
 result_path="$container_path/Documents/audio-lifecycle-results.txt"
 rm -f "$result_path"
 if [[ "$test_mode" == legacy ]]; then export SIMCTL_CHILD_ML_AUDIO_TEST_LEGACY=1; else unset SIMCTL_CHILD_ML_AUDIO_TEST_LEGACY; fi
 SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$validation_dir/MLAudioLifecycleTests.dylib" \
-    xcrun simctl launch booted "$validation_bundle"
+    xcrun simctl launch "$validation_device" "$validation_bundle"
 for attempt in {1..150}; do
     if [[ -f "$result_path" ]]; then
         cat "$result_path"

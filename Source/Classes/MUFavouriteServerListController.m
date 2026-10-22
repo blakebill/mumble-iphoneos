@@ -37,13 +37,6 @@
     [MUDatabase storeFavourites:_favouriteServers];
 }
 
-- (UIInterfaceOrientationMask) supportedInterfaceOrientations {
-    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
-        return UIInterfaceOrientationMaskAll;
-    }
-    return UIInterfaceOrientationMaskPortrait;
-}
-
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     MUConfigureTable(self.tableView);

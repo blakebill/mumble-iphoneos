@@ -6,4 +6,8 @@
 
 @interface MUServerViewController : UITableViewController <MLServerModelDelegate>
 - (id) initWithServerModel:(MLServerModel *)serverModel;
+@property(nonatomic, weak) UIView *voiceControlsHostView;
+@property(nonatomic) BOOL showsPaneTitle;
+- (void)layoutVoiceControls;
+- (CGFloat)voiceControlsContentHeight;
 @end
