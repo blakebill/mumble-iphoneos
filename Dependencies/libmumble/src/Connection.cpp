@@ -105,32 +105,39 @@ Code Connection::process(const bool wait, const std::function< bool() > halt) {
 
 	const auto guard = m_p->lock();
 	do {
-		NetHeader header;
-		auto code = m_p->read({ reinterpret_cast< std::byte * >(&header), sizeof(header) }, wait, halt);
-		if (code != Code::Success) {
-			return code;
-		}
-
-		// Mumble control messages may contain textures and exceed 64 KiB.
-		if (Endian::toHost(header.size) > 8 * 1024 * 1024) {
-			if (!m_p->m_closed.test_and_set()) {
-				m_p->m_feedback.failed(Code::Invalid);
+		if (!m_p->m_incoming) {
+			BufView header{ reinterpret_cast< std::byte * >(&m_p->m_header) + m_p->m_headerBytes,
+						 sizeof(NetHeader) - m_p->m_headerBytes };
+			const auto code = m_p->read(header, wait, halt);
+			m_p->m_headerBytes = sizeof(NetHeader) - header.size();
+			if (code != Code::Success) {
+				return code;
 			}
 
-			return Code::Invalid;
+			// Mumble control messages may contain textures and exceed 64 KiB.
+			if (Endian::toHost(m_p->m_header.size) > 8 * 1024 * 1024) {
+				if (!m_p->m_closed.test_and_set()) {
+					m_p->m_feedback.failed(Code::Invalid);
+				}
+				return Code::Invalid;
+			}
+			m_p->m_incoming = std::make_unique< Pack >(m_p->m_header);
 		}
 
-		Pack pack(header);
-
-		if (!pack.data().empty()) {
-			code = m_p->read(pack.data(), wait, halt);
+		if (!m_p->m_incoming->data().empty()) {
+			BufView payload = m_p->m_incoming->data().subspan(m_p->m_payloadBytes);
+			const auto code = m_p->read(payload, wait, halt);
+			m_p->m_payloadBytes = m_p->m_incoming->data().size() - payload.size();
 			if (code != Code::Success) {
 				return code;
 			}
 		}
 
-		m_p->m_feedback.pack(pack);
-	} while (m_p->pending() >= sizeof(NetHeader));
+		auto pack = std::move(m_p->m_incoming);
+		m_p->m_headerBytes = 0;
+		m_p->m_payloadBytes = 0;
+		m_p->m_feedback.pack(*pack);
+	} while (m_p->pending() > 0);
 
 	return Code::Success;
 }
@@ -155,7 +162,7 @@ P::operator bool() const {
 	return SocketTLS::operator bool() && m_monitorIn && m_monitorOut;
 }
 
-Code P::read(BufView buf, const bool wait, const std::function< bool() > halt) {
+Code P::read(BufView &buf, const bool wait, const std::function< bool() > halt) {
 	using Code = mumble::Code;
 
 	while (!halt()) {
