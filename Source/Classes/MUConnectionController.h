@@ -4,10 +4,12 @@
 
 extern NSString *MUConnectionOpenedNotification;
 extern NSString *MUConnectionClosedNotification;
+@class MUFavouriteServer;
 
 @interface MUConnectionController : UIView
 + (MUConnectionController *) sharedController;
 - (void) connectToHostname:(NSString *)hostName port:(NSUInteger)port withUsername:(NSString *)userName andPassword:(NSString *)password withParentViewController:(UIViewController *)parentViewController;
+- (void)connectToFavouriteServer:(MUFavouriteServer *)server withParentViewController:(UIViewController *)parentViewController;
 - (BOOL) isConnected;
 - (void) disconnectFromServer;
 @end

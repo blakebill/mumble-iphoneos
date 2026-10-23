@@ -615,6 +615,15 @@
 				28BE998418CFB96A00910551,
 				A18E5C020000000100A18E01,
 				A18E5C030000000100A18E01,
+				A15000000000000000000011,
+				A15000000000000000000012,
+				A15000000000000000000001,
+				A15000000000000000000002,
+				287BA28E11B96C960010E031,
+				287BA28F11B96C960010E031,
+				C0DE20261013000000000001,
+				2801C35911CA9F1A00E664E8,
+				2801C35A11CA9F1A00E664E8,
 			);
 			sourceTree = "<group>";
 		};
@@ -1274,6 +1283,8 @@
 				A1B2C3D4000000000000006C,
 				A1B2C3D40000000000000069,
 				A18E5C010000000100A18E01,
+				A15000000000000000000013,
+				A15000000000000000000003,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1728,6 +1739,51 @@
 		A18E5C010000000100A18E01 = {
 			isa = PBXBuildFile;
 			fileRef = A18E5C030000000100A18E01;
+		};
+
+		A15000000000000000000011 = {
+			path = MUAboutViewController.h;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			sourceTree = "<group>";
+		};
+
+		A15000000000000000000012 = {
+			path = MUAboutViewController.m;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			sourceTree = "<group>";
+		};
+
+		A15000000000000000000013 = {
+			isa = PBXBuildFile;
+			fileRef = A15000000000000000000012;
+		};
+
+		A15000000000000000000001 = {
+			path = MUAppMenuViewController.h;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			sourceTree = "<group>";
+		};
+
+		A15000000000000000000002 = {
+			path = MUAppMenuViewController.m;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			sourceTree = "<group>";
+		};
+
+		A15000000000000000000003 = {
+			isa = PBXBuildFile;
+			fileRef = A15000000000000000000002;
+		};
+
+		C0DE20261013000000000001 = {
+			path = MUInterface.h;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			sourceTree = "<group>";
 		};
 
 	};
