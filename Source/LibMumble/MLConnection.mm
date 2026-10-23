@@ -335,7 +335,10 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
             int ready=poll(sockets,3,timeout);
             if (ready<0 && errno!=EINTR) { failure=Code::Failure; break; }
             if (sockets[2].revents&POLLIN) state->drainWake();
-            if (sockets[0].revents&POLLIN) { auto code=connection->process(true,[&](){ return state->halt.load(); }); if (code!=Code::Success) failure=code; }
+            // TLS control records can make the socket readable without an
+            // application packet. Never block the worker here: authentication
+            // and other queued writes must still be serviced through wakeReader.
+            if (sockets[0].revents&POLLIN) { auto code=connection->process(false,[&](){ return state->halt.load(); }); if (code!=Code::Success && code!=Code::Busy) failure=code; }
             else if (sockets[0].revents&(POLLHUP|POLLERR|POLLNVAL)) { failure=Code::Disconnect; break; }
             if (udp>=0 && sockets[1].revents&POLLIN) {
                 std::array<std::byte,65536> bytes;

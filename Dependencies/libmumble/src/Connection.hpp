@@ -9,6 +9,7 @@
 #include "mumble/Connection.hpp"
 
 #include "mumble/Cert.hpp"
+#include "mumble/Pack.hpp"
 #include "mumble/Types.hpp"
 
 #include "Monitor.hpp"
@@ -38,7 +39,7 @@ private:
 		return std::lock_guard< std::recursive_mutex >(m_mutex);
 	}
 
-	mumble::Code read(BufView buf, const bool wait, const std::function< bool() > halt);
+	mumble::Code read(BufView &buf, const bool wait, const std::function< bool() > halt);
 	mumble::Code write(BufViewConst buf, const bool wait, const std::function< bool() > halt);
 
 	mumble::Code handleCode(const Code code, const bool wait);
@@ -52,6 +53,10 @@ private:
 	Monitor m_monitorOut;
 
 	Cert::Chain m_cert;
+	tcp::NetHeader m_header{};
+	size_t m_headerBytes = 0;
+	std::unique_ptr< tcp::Pack > m_incoming;
+	size_t m_payloadBytes = 0;
 	uint32_t m_timeouts;
 	std::atomic_flag m_closed;
 	std::recursive_mutex m_mutex;
