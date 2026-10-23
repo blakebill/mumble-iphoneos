@@ -6,7 +6,7 @@
 
 #import "MUWelcomeScreenPhone.h"
 #import "MUWelcomeScreenPad.h"
-#import "MUBackgroundView.h"
+#import "MUAppMenuViewController.h"
 #import "MUDatabase.h"
 #import "MUPublicServerList.h"
 #import "MUConnectionController.h"
@@ -85,35 +85,24 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
     
 - (void) installUserInterfaceInWindow:(UIWindow *)window {
     _window = window;
-    if (@available(iOS 7, *)) {
-    // XXX: don't do it system-wide just yet
-    //    _window.tintColor = [UIColor whiteColor];
-    }
-
-    UINavigationBar.appearance.tintColor = [UIColor whiteColor];
-    UINavigationBar.appearance.translucent = NO;
-    UINavigationBar.appearance.barTintColor = [UIColor blackColor];
-    UINavigationBar.appearance.backgroundColor = [UIColor blackColor];
-    UINavigationBar.appearance.barStyle = UIBarStyleBlack;
-    
-    // Put a background view in here, to have prettier transitions.
-    [_window addSubview:[MUBackgroundView backgroundView]];
-
-    // Add our default navigation controller
-    _navigationController = [[UINavigationController alloc] init];
-    _navigationController.toolbarHidden = YES;
 
     UIUserInterfaceIdiom idiom = [[UIDevice currentDevice] userInterfaceIdiom];
-    UIViewController *welcomeScreen = nil;
-    if (idiom == UIUserInterfaceIdiomPad) {
-        welcomeScreen = [[MUWelcomeScreenPad alloc] init];
-        [_navigationController pushViewController:welcomeScreen animated:YES];
-    } else {
-        welcomeScreen = [[MUWelcomeScreenPhone alloc] init];
-        [_navigationController pushViewController:welcomeScreen animated:YES];
-    }
-    
-    [_window setRootViewController:_navigationController];
+    UIViewController *welcomeScreen = idiom == UIUserInterfaceIdiomPad ? [MUWelcomeScreenPad new] : [MUWelcomeScreenPhone new];
+    _navigationController = [[UINavigationController alloc] initWithRootViewController:welcomeScreen];
+    _navigationController.navigationBar.prefersLargeTitles = YES;
+    _navigationController.tabBarItem = [[UITabBarItem alloc] initWithTitle:NSLocalizedString(@"Home", nil)
+        image:[UIImage systemImageNamed:@"house"] selectedImage:[UIImage systemImageNamed:@"house.fill"]];
+
+    _settingsNavigationController = [[UINavigationController alloc] initWithRootViewController:[MUAppMenuViewController new]];
+    _settingsNavigationController.delegate = self;
+    _settingsNavigationController.navigationBar.prefersLargeTitles = YES;
+    _settingsNavigationController.tabBarItem = [[UITabBarItem alloc] initWithTitle:NSLocalizedString(@"Settings", nil)
+        image:[UIImage systemImageNamed:@"gearshape"] selectedImage:[UIImage systemImageNamed:@"gearshape.fill"]];
+
+    _tabBarController = [UITabBarController new];
+    _tabBarController.delegate = self;
+    _tabBarController.viewControllers = @[_navigationController, _settingsNavigationController];
+    _window.rootViewController = _tabBarController;
     [_window makeKeyAndVisible];
 
     // Database, badge and the public-server refresh are not needed to draw

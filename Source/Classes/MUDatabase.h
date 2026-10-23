@@ -14,6 +14,7 @@
 
 // FavouriteServer
 + (void) storeFavourite:(MUFavouriteServer *)favServ;
++ (void)storePassword:(NSString *)password forFavouriteWithPrimaryKey:(NSInteger)primaryKey;
 + (void) deleteFavourite:(MUFavouriteServer *)favServ;
 + (void) storeFavourites:(NSArray *)favourites;
 + (NSMutableArray *) fetchAllFavourites;

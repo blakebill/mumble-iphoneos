@@ -4,6 +4,11 @@
 
 @interface MUImage : NSObject
 + (UIImage *) tableViewCellImageFromImage:(UIImage *)srcImage;
++ (UIImage *) symbolNamed:(NSString *)name pointSize:(CGFloat)pointSize;
++ (UIImage *)channelSymbolForCurrentChannel:(BOOL)current;
++ (UIImage *) userTalkSymbolForState:(NSInteger)talkState;
++ (UIColor *) userTalkColorForState:(NSInteger)talkState;
 + (UIImage *) imageNamed:(NSString *)imageName;
 + (UIImage *) clearColorImage;
+
 @end

@@ -6,10 +6,31 @@
 #import "MUFavouriteServer.h"
 
 static FMDatabase *db = nil;
+static void *MUDatabaseQueueKey = &MUDatabaseQueueKey;
+
+static dispatch_queue_t MUDatabaseQueue(void) {
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        queue = dispatch_queue_create("info.mumble.database", DISPATCH_QUEUE_SERIAL);
+        dispatch_queue_set_specific(queue, MUDatabaseQueueKey, MUDatabaseQueueKey, NULL);
+    });
+    return queue;
+}
+
+static void MUDatabasePerform(dispatch_block_t block) {
+    if (dispatch_get_specific(MUDatabaseQueueKey) == MUDatabaseQueueKey) {
+        block();
+    } else {
+        dispatch_sync(MUDatabaseQueue(), block);
+    }
+}
 
 @interface MUDatabase ()
 + (NSString *) filePath;
 + (void) moveOldDatabases;
++ (void) openDatabaseIfNeeded;
++ (void) storeFavouriteOnQueue:(MUFavouriteServer *)favServ;
 @end
 
 @implementation MUDatabase
@@ -56,6 +77,15 @@ static FMDatabase *db = nil;
 
 // Initialize the database.
 + (void) initializeDatabase {
+    dispatch_async(MUDatabaseQueue(), ^{
+        [self openDatabaseIfNeeded];
+    });
+}
+
++ (void) openDatabaseIfNeeded {
+    if (db != nil) {
+        return;
+    }
     NSLog(@"Initializing database with SQLite version: %@", [FMDatabase sqliteLibVersion]);
 
     // Attempt to move old databases if we find ones
@@ -104,7 +134,6 @@ static FMDatabase *db = nil;
                       @" `tokens` BLOB)"];
     [db executeUpdate:@"CREATE UNIQUE INDEX IF NOT EXISTS `tokens_host_port`"
                       @" on `tokens`(`hostname`,`port`)"];
-    [db executeUpdate:@"VACUUM"];
 
     if ([db hadError]) {
         NSLog(@"MUDatabase: Error: %@ (Code: %i)", [db lastErrorMessage], [db lastErrorCode]);
@@ -118,6 +147,21 @@ static FMDatabase *db = nil;
 
 // Store a single favourite
 + (void) storeFavourite:(MUFavouriteServer *)favServ {
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [self storeFavouriteOnQueue:favServ];
+    });
+}
+
++ (void)storePassword:(NSString *)password forFavouriteWithPrimaryKey:(NSInteger)primaryKey {
+    if (primaryKey < 0 || !password.length) return;
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [db executeUpdate:@"UPDATE `favourites` SET `password`=? WHERE `id`=?", password, @(primaryKey)];
+    });
+}
+
++ (void) storeFavouriteOnQueue:(MUFavouriteServer *)favServ {
     // If the favourite already has a primary key, update the currently stored entity
     if ([favServ hasPrimaryKey]) {
         [db executeUpdate:@"UPDATE `favourites` SET `name`=?, `hostname`=?, `port`=?, `username`=?, `password`=? WHERE `id`=?",
@@ -151,34 +195,44 @@ static FMDatabase *db = nil;
 
 // Delete a particular favourite
 + (void) deleteFavourite:(MUFavouriteServer *)favServ {
-    NSAssert([favServ hasPrimaryKey], @"Cannot delete a FavouriteServer not originated from the database.");
-    [db executeUpdate:@"DELETE FROM `favourites` WHERE `id`=?", [NSNumber numberWithInteger:[favServ primaryKey]]];
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        NSAssert([favServ hasPrimaryKey], @"Cannot delete a FavouriteServer not originated from the database.");
+        [db executeUpdate:@"DELETE FROM `favourites` WHERE `id`=?", [NSNumber numberWithInteger:[favServ primaryKey]]];
+    });
 }
 
 // Save favourites
 + (void) storeFavourites:(NSArray *)favourites {
-    [db beginTransaction];
-    for (MUFavouriteServer *favServ in favourites) {
-        [MUDatabase storeFavourite:favServ];
-    }
-    [db commit];
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [db beginTransaction];
+        for (MUFavouriteServer *favServ in favourites) {
+            [self storeFavouriteOnQueue:favServ];
+        }
+        [db commit];
+    });
 }
 
 // Fetch all favourites
 + (NSMutableArray *) fetchAllFavourites {
-    NSMutableArray *favs = [[NSMutableArray alloc] init];
-    FMResultSet *res = [db executeQuery:@"SELECT `id`, `name`, `hostname`, `port`, `username`, `password` FROM `favourites`"];
-    while ([res next]) {
-        MUFavouriteServer *fs = [[MUFavouriteServer alloc] init];
-        [fs setPrimaryKey:[res intForColumnIndex:0]];
-        [fs setDisplayName:[res stringForColumnIndex:1]];
-        [fs setHostName:[res stringForColumnIndex:2]];
-        [fs setPort:[res intForColumnIndex:3]];
-        [fs setUserName:[res stringForColumnIndex:4]];
-        [fs setPassword:[res stringForColumnIndex:5]];
-        [favs addObject:fs];
-    }
-    [res close];
+    __block NSMutableArray *favs = nil;
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        favs = [[NSMutableArray alloc] init];
+        FMResultSet *res = [db executeQuery:@"SELECT `id`, `name`, `hostname`, `port`, `username`, `password` FROM `favourites`"];
+        while ([res next]) {
+            MUFavouriteServer *fs = [[MUFavouriteServer alloc] init];
+            [fs setPrimaryKey:[res intForColumnIndex:0]];
+            [fs setDisplayName:[res stringForColumnIndex:1]];
+            [fs setHostName:[res stringForColumnIndex:2]];
+            [fs setPort:[res intForColumnIndex:3]];
+            [fs setUserName:[res stringForColumnIndex:4]];
+            [fs setPassword:[res stringForColumnIndex:5]];
+            [favs addObject:fs];
+        }
+        [res close];
+    });
     return favs;
 }
 
@@ -186,35 +240,50 @@ static FMDatabase *db = nil;
 #pragma mark Certificate verification
 
 + (void) storeDigest:(NSString *)hash forServerWithHostname:(NSString *)hostname port:(NSInteger)port {
-    [db executeUpdate:@"REPLACE INTO `cert` (`hostname`,`port`,`digest`) VALUES (?,?,?)",
-           hostname, [NSNumber numberWithInteger:port], hash];
-
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [db executeUpdate:@"REPLACE INTO `cert` (`hostname`,`port`,`digest`) VALUES (?,?,?)",
+               hostname, [NSNumber numberWithInteger:port], hash];
+    });
 }
 
 + (NSString *) digestForServerWithHostname:(NSString *)hostname port:(NSInteger)port {
-    FMResultSet *result = [db executeQuery:@"SELECT `digest` FROM `cert` WHERE `hostname` = ? AND `port` = ?",
-                                 hostname, [NSNumber numberWithInteger:port]];
-    if ([result next]) {
-        return [result stringForColumnIndex:0];
-    }
-    return nil;
+    __block NSString *digest = nil;
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        FMResultSet *result = [db executeQuery:@"SELECT `digest` FROM `cert` WHERE `hostname` = ? AND `port` = ?",
+                                     hostname, [NSNumber numberWithInteger:port]];
+        if ([result next]) {
+            digest = [result stringForColumnIndex:0];
+        }
+        [result close];
+    });
+    return digest;
 }
 
 #pragma mark -
 #pragma mark Username rememberer
 
 + (void) storeUsername:(NSString *)username forServerWithHostname:(NSString *)hostname port:(NSInteger)port {
-    [db executeUpdate:@"REPLACE INTO `usernames` (`hostname`,`port`,`username`) VALUES (?,?,?)",
-        hostname, [NSNumber numberWithInteger:port], username];
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [db executeUpdate:@"REPLACE INTO `usernames` (`hostname`,`port`,`username`) VALUES (?,?,?)",
+            hostname, [NSNumber numberWithInteger:port], username];
+    });
 }
 
 + (NSString *) usernameForServerWithHostname:(NSString *)hostname port:(NSInteger)port {
-    FMResultSet *result = [db executeQuery:@"SELECT `username` FROM `usernames` WHERE `hostname` = ? AND `port` = ?",
-                           hostname, [NSNumber numberWithInteger:port]];
-    if ([result next]) {
-        return [result stringForColumnIndex:0];
-    }
-    return nil;
+    __block NSString *username = nil;
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        FMResultSet *result = [db executeQuery:@"SELECT `username` FROM `usernames` WHERE `hostname` = ? AND `port` = ?",
+                               hostname, [NSNumber numberWithInteger:port]];
+        if ([result next]) {
+            username = [result stringForColumnIndex:0];
+        }
+        [result close];
+    });
+    return username;
 }
 
 #pragma mark -
@@ -230,24 +299,33 @@ static FMDatabase *db = nil;
             return;
         }
     }
-    [db executeUpdate:@"REPLACE INTO `tokens` (`hostname`,`port`,`tokens`) VALUES (?,?,?)",
-        hostname, [NSNumber numberWithInteger:port], tokensJSON];
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [db executeUpdate:@"REPLACE INTO `tokens` (`hostname`,`port`,`tokens`) VALUES (?,?,?)",
+            hostname, [NSNumber numberWithInteger:port], tokensJSON];
+    });
 }
 
 + (NSArray *) accessTokensForServerWithHostname:(NSString *)hostname port:(NSInteger)port {
-    FMResultSet *result = [db executeQuery:@"SELECT `tokens` FROM `tokens` WHERE `hostname` = ? AND `port` = ?",
-                           hostname, [NSNumber numberWithInteger:port]];
-    if ([result next]) {
-        NSError *err = nil;
-        NSData *tokensJSON = [result dataForColumnIndex:0];
-        NSArray *tokens = [NSJSONSerialization JSONObjectWithData:tokensJSON options:0 error:&err];
-        if (err != nil) {
-            NSLog(@"MUDatabase#accessTokensForServerWithHostname:port: %@", err);
-            return nil;
+    __block NSArray *tokens = nil;
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        FMResultSet *result = [db executeQuery:@"SELECT `tokens` FROM `tokens` WHERE `hostname` = ? AND `port` = ?",
+                               hostname, [NSNumber numberWithInteger:port]];
+        if ([result next]) {
+            NSError *err = nil;
+            NSData *tokensJSON = [result dataForColumnIndex:0];
+            if (tokensJSON != nil) {
+                tokens = [NSJSONSerialization JSONObjectWithData:tokensJSON options:0 error:&err];
+                if (err != nil) {
+                    NSLog(@"MUDatabase#accessTokensForServerWithHostname:port: %@", err);
+                    tokens = nil;
+                }
+            }
         }
-        return tokens;
-    }
-    return nil;
+        [result close];
+    });
+    return tokens;
 }
 
 @end
