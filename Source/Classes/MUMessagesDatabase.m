@@ -1,4 +1,3 @@
-#import "MLClient.h"
 // Copyright 2009-2012 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -7,6 +6,7 @@
 #import "MUTextMessage.h"
 #import "MUDataURL.h"
 
+#import "MLClient.h"
 
 #import <FMDB/FMDatabase.h>
 
@@ -21,10 +21,8 @@
 
 - (id) init {
     if ((self = [super init])) {
-        NSFileManager *manager = [NSFileManager defaultManager];
         NSString *directory = NSTemporaryDirectory();
-        NSString *dbPath = [directory stringByAppendingPathComponent:@"msg.db"];
-        [manager removeItemAtPath:dbPath error:nil];
+        NSString *dbPath = [directory stringByAppendingPathComponent:[NSString stringWithFormat:@"msg-%@.db", [[NSUUID UUID] UUIDString]]];
         _db = [[FMDatabase alloc] initWithPath:dbPath];
         if (![_db open]) {
             NSLog(@"MUMessagesDatabse: Failed to open.");
@@ -32,13 +30,22 @@
         
         [_db executeUpdate:@"CREATE TABLE IF NOT EXISTS `msg` "
                            @"(`id` INTEGER PRIMARY KEY AUTOINCREMENT,"
-                           @" `rendered` BLOB,"
                            @" `plist` BLOB)"];
         
         _msgCache = [[NSCache alloc] init];
-        [_msgCache setCountLimit:10];
+        // This store is deliberately temporary; avoid durable disk synchronization per message.
+        [_db executeUpdate:@"PRAGMA journal_mode=MEMORY"];
+        [_db executeUpdate:@"PRAGMA synchronous=OFF"];
+        [_msgCache setCountLimit:128];
+        [_msgCache setTotalCostLimit:24 * 1024 * 1024];
     }
     return self;
+}
+
+- (void)dealloc {
+    NSString *path = _db.databasePath;
+    [_db close];
+    if (path) [NSFileManager.defaultManager removeItemAtPath:path error:nil];
 }
 
 - (void) addMessage:(MLTextMessage *)msg withHeading:(NSString *)heading andSentBySelf:(BOOL)selfSent {
@@ -62,12 +69,12 @@
                                 [NSNumber numberWithBool:selfSent], @"selfsent",
                           nil];
     NSData *plist = [NSPropertyListSerialization dataWithPropertyList:dict format:NSPropertyListBinaryFormat_v1_0 options:0 error:&err];
-    [_db executeUpdate:@"INSERT INTO `msg` (`rendered`, `plist`) VALUES (?,?)", [NSNull null], plist ? plist : [NSNull null]];
+    [_db executeUpdate:@"INSERT INTO `msg` (`plist`) VALUES (?)", plist ? plist : [NSNull null]];
     _count++;
 }
 
 - (void) clearMessageAtIndex:(NSInteger)row {
-    [_db executeUpdate:@"UPDATE `msg` SET `plist`=NULL, `rendered`=NULL WHERE `id`=?", [NSNumber numberWithInteger:row+1]];
+    [_db executeUpdate:@"UPDATE `msg` SET `plist`=NULL WHERE `id`=?", [NSNumber numberWithInteger:row+1]];
     [_msgCache removeObjectForKey:[NSNumber numberWithInteger:row+1]];
 }
 
@@ -85,7 +92,8 @@
                 NSArray *imgDataArray = [dict objectForKey:@"images"];
                 NSMutableArray *imagesArray = [[NSMutableArray alloc] initWithCapacity:[imgDataArray count]];
                 for (NSData *data in imgDataArray) {
-                    [imagesArray addObject:[UIImage imageWithData:data]];
+                    UIImage *image = [UIImage imageWithData:data];
+                    if (image) [imagesArray addObject:image];
                 }
                 txtMsg = [MUTextMessage textMessageWithHeading:[dict objectForKey:@"heading"]
                                                     andMessage:[dict objectForKey:@"msg"]
@@ -93,11 +101,15 @@
                                              andEmbeddedImages:imagesArray
                                               andTimestampDate:[dict objectForKey:@"date"]
                                                   isSentBySelf:[[dict objectForKey:@"selfsent"] boolValue]];
-                [_msgCache setObject:txtMsg forKey:[NSNumber numberWithInteger:row+1]];
+                NSUInteger cost = [[dict objectForKey:@"msg"] length] * 2;
+                for (UIImage *image in imagesArray) cost += (NSUInteger)(image.size.width * image.scale * image.size.height * image.scale * 4);
+                [_msgCache setObject:txtMsg forKey:@(row+1) cost:cost];
+                [result close];
                 return txtMsg;
             }
         }
     }
+    [result close];
     return nil;
 }
 
