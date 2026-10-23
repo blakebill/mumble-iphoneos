@@ -11,6 +11,12 @@ jobs:
         run: |
           test "$(uname -m)" = arm64
           xcodebuild -version
+      - name: Check project integrity
+        run: python3 Scripts/check-project-integrity.py
+      - name: Test text messages
+        run: bash Scripts/test-text-messages.sh
+      - name: Check translations
+        run: python3 Scripts/check-localizations.py
       - name: Install build tools
         run: brew install cmake ninja pkgconf
       - name: Bootstrap pinned vcpkg

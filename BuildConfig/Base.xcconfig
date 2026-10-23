@@ -12,7 +12,7 @@ CODE_SIGN_IDENTITY[sdk=iphoneos*] = iPhone Developer
 TARGETED_DEVICE_FAMILY = 1 // iPhone
 
 ALWAYS_SEARCH_USER_PATHS = NO
-USER_HEADER_SEARCH_PATHS = "${PROJECT_DIR}/Dependencies/MKNumberBadgeView"
+USER_HEADER_SEARCH_PATHS = 
 HEADER_SEARCH_PATHS = "${PROJECT_DIR}/Source/LibMumble/" "$(PROJECT_DIR)/Dependencies/Generated/libmumble.xcframework/$(LIBMUMBLE_SLICE)/Headers"
 FRAMEWORK_SEARCH_PATHS =
 

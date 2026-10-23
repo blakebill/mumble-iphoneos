@@ -35,34 +35,4 @@
     return talkState == 0 ? [UIColor secondaryLabelColor] : [UIColor systemGreenColor];
 }
 
-+ (UIImage *) imageNamed:(NSString *)imageName {
-    CGFloat scale = [UIScreen mainScreen].scale;
-    CGFloat height = [UIScreen mainScreen].bounds.size.height;
-    // For now, we require all -568h images to also be @2x.
-    if (height == 568 && scale == 2) {
-        NSString *expectedFn = [NSString stringWithFormat:@"%@-568h", imageName];
-        UIImage *attemptedImage = [UIImage imageNamed:expectedFn];
-        if (attemptedImage != nil) {
-            return attemptedImage;
-        }
-        // fallthrough
-    }
-    return [UIImage imageNamed:imageName];
-}
-
-// clearColorImage returns a 1x1 clearColor image
-// that can be used as a transparent background image
-// for UIKit APIs that force you to provide UIImages.
-+ (UIImage *) clearColorImage {
-	CGRect fillRect = CGRectMake(0.0, 0.0, 1.0, 1.0);
-	UIGraphicsBeginImageContext(fillRect.size);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	CGContextSetFillColorWithColor(ctx, [UIColor clearColor].CGColor);
-	CGContextFillRect(ctx, fillRect);
-	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return img;
-}
-
-
 @end
