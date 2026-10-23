@@ -73,6 +73,7 @@ static void sendProto(SSL *ssl, const google::protobuf::Message &message, bool f
 @property(nonatomic,weak) MLConnection *connection;
 @property(nonatomic,strong) NSData *fixtureOpus;
 @property(nonatomic,strong) NSDate *speechStarted;
+@property(nonatomic) BOOL delayAuthentication;
 @end
 @implementation MLTestDelegate
 - (void)connection:(MLConnection *)connection trustFailureInCertificateChain:(NSArray *)chain {
@@ -81,7 +82,15 @@ static void sendProto(SSL *ssl, const google::protobuf::Message &message, bool f
     if (_trustFailures==1) { [connection setIgnoreSSLVerification:YES]; [connection reconnect]; }
     else { assert(_trustFailures==2); completed=true; [connection disconnect]; }
 }
-- (void)connectionOpened:(MLConnection *)connection { ++_opened; [connection authenticateWithUsername:@"Test User" password:@"fixture password" accessTokens:@[@"fixture token"]]; }
+- (void)connectionOpened:(MLConnection *)connection {
+    ++_opened;
+    void (^authenticate)(void)=^{ [connection authenticateWithUsername:@"Test User" password:@"fixture password" accessTokens:@[@"fixture token"]]; };
+    // Let TLS 1.3 session tickets reach the worker before credentials are
+    // queued. A readable TLS socket must not block pending outgoing work
+    // while the server is waiting for authentication.
+    if (_delayAuthentication) dispatch_after(dispatch_time(DISPATCH_TIME_NOW,250*NSEC_PER_MSEC),dispatch_get_main_queue(),authenticate);
+    else authenticate();
+}
 - (void)connection:(MLConnection *)connection unableToConnectWithError:(NSError *)error { NSLog(@"Unexpected failure: %@",error); assert(false); }
 - (void)connection:(MLConnection *)connection closedWithError:(NSError *)error { NSLog(@"Unexpected close: %@",error); assert(false); }
 - (void)serverModel:(MLServerModel *)model joinedServerAsUser:(MLUser *)user {
@@ -178,6 +187,7 @@ static int runTransport(bool modern) { @autoreleasepool {
     int probe=socket(AF_INET,SOCK_DGRAM,0); assert(!bind(probe,(sockaddr *)&address,sizeof(address)));
     timeval timeout{5,0}; setsockopt(probe,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
     MLTestDelegate *delegate=[MLTestDelegate new];
+    delegate.delayAuthentication=modern;
     MLConnection *connection=[MLConnection new]; connection.delegate=delegate; connection.forceTCP=modern;
     connection.certificateChain=nativeIdentity(!modern);
     MLServerModel *model=[[MLServerModel alloc] initWithConnection:connection]; [model addDelegate:delegate];
@@ -200,6 +210,10 @@ static int runTransport(bool modern) { @autoreleasepool {
             int fd=accept(listener,nullptr,nullptr); assert(fd>=0); int one=1; setsockopt(fd,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof(one));
             setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
             SSL_CTX *context=serverContext(attempt==2?rotated:first);
+            if (modern) {
+                SSL_CTX_set_min_proto_version(context,TLS1_3_VERSION);
+                SSL_CTX_set_num_tickets(context,2);
+            }
             SSL_CTX_set_verify(context,SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT,[](int,X509_STORE_CTX *) { return 1; });
             SSL *ssl=SSL_new(context); SSL_set_fd(ssl,fd); assert(SSL_accept(ssl)==1);
             Cert client(SSL_get1_peer_certificate(ssl)); assert(client && client.subjectAttributes().at("CN")=="Test User");
