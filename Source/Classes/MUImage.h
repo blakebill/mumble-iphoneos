@@ -8,7 +8,4 @@
 + (UIImage *)channelSymbolForCurrentChannel:(BOOL)current;
 + (UIImage *) userTalkSymbolForState:(NSInteger)talkState;
 + (UIColor *) userTalkColorForState:(NSInteger)talkState;
-+ (UIImage *) imageNamed:(NSString *)imageName;
-+ (UIImage *) clearColorImage;
-
 @end

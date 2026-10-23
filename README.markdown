@@ -1,46 +1,68 @@
-Mumble for iOS (iPhone, iPod touch and iPad)
-============================================
+# Mumble for iOS
 
-**Note:** This repo and the app for iOS are unmaintained.
-If you are interested in taking over development of the app, write a comment in [#129](https://github.com/mumble-voip/mumble-iphoneos/issues/129).
+This application uses [libmumble](https://github.com/mumble-voip/libmumble) through
+an application-owned Objective-C++ backend, with native iOS audio. MumbleKit is
+no longer a dependency. The existing interface, database and keychain remain
+part of this application.
 
+## Requirements
 
-This is the source code of Mumble (a voice chat application) for iOS-based devices.
+- Apple Silicon Mac, Xcode 27 or newer, iOS 18 or newer.
+- CMake 3.24+, Ninja, pkg-config and a bootstrapped vcpkg checkout.
+- Internet access for the first dependency build.
 
-The [desktop version](https://github.com/mumble-voip/mumble) of Mumble runs on Windows, Mac OS X, Linux
-and various other Unix-like systems. 
+Library sources are pinned in `Dependencies/libmumble`; dependency versions are
+pinned by its vcpkg manifest. Builds include ARM64 iPhone and ARM64 Simulator.
+FMDB remains an upstream submodule; `Scripts/build-libmumble.sh` automatically
+applies the checked-in iOS build/linker patch. To prepare FMDB separately, run
+`bash Scripts/prepare-fmdb.sh` after cloning recursively.
 
-Visit our website at:
-<https://mumble.info/>
+## Build
 
-Building it
-===========
+Clone this repository recursively to obtain FMDB. Install build tools and
+bootstrap the pinned dependency manager:
 
-To build this you need Xcode 16 and the latest iOS SDK from Apple.
+```sh
+brew install cmake ninja pkgconf
+git clone https://github.com/microsoft/vcpkg.git /path/to/vcpkg
+git -C /path/to/vcpkg checkout e456309491fd875487bf02b8a0dca76c1b1b00cc
+/path/to/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+export VCPKG_ROOT=/path/to/vcpkg
+bash Scripts/build-libmumble.sh
+```
 
-The easiest way to get a working source tree is to check out
-the mumble-iphoneos repository recursively (his will recursively
-fetch all submodules), because there are quite a few submodules.
+The generated `Dependencies/Generated/libmumble.xcframework` contains static
+libraries and headers. All dependencies target iOS 18. Third-party notices in
+the Legal screen are refreshed from the source licenses. Generated binaries are
+ignored by Git. Rebuild the framework after changing library sources/dependencies.
 
-To fetch the repository:
+Open `Mumble.xcodeproj`, select **Mumble**, configure your signing team, and build.
+Use Debug for development and Release for distribution; Archive also uses Release.
+For builds without signing:
 
-    $ git clone --recursive http://github.com/mumble-voip/mumble-iphoneos.git
+```sh
+xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
+```
 
-Once this is done, you should be able to open up the Xcode
-project file for Mumble (Mumble.xcodeproj) in the root of
-the source tree and hit Cmd-B to build!
+Check project references, packaged resources and message conversion, then run
+the local backend integration tests:
 
-Extra tips for advanced users
-=============================
+```sh
+python3 Scripts/check-project-integrity.py
+python3 Scripts/check-localizations.py
+bash Scripts/test-text-messages.sh
+bash Scripts/test-libmumble.sh
+```
 
-When launching Mumble.xcodeproj for the first time, you're recommended to
-remove all schemes but the Mumble one. Xcode will automatically populate
-it with the schemes of all .xcodeprojs in the workspace.
+`LIBMUMBLE_BUILD_ROOT`, `LIBMUMBLE_TEST_ROOT` and `LIBMUMBLE_BUILD_JOBS` control
+build locations and concurrency. Tests run independently of the XCFramework.
+See [the backend notes](Source/LibMumble/README.md) for architecture, compatibility,
+test coverage and physical-device checks.
 
-Schemes can be configured using the dropdown box right of the start and stop
-buttons in the default Xcode 4 UI.
+The GitHub Actions build uses GitHub's `xcode-27` preview image while Xcode 27
+is unavailable on the regular macOS images. The app's deployment target remains
+iOS 18; older iOS versions use compatibility paths and a static app icon.
 
-We also recommend you to edit the default scheme for the Mumble target
-and change the Archive configuration to BetaDist, and the Test configuration
-to Release (debug builds pretty slow for devices, but for the Simulator, they're
-OK!)
+This project originates from the [Mumble iOS application](https://github.com/mumble-voip/mumble-iphoneos).
+Mumble is an open-source voice chat application: [mumble.info](https://www.mumble.info/).
