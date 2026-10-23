@@ -12,7 +12,9 @@
 #include <thread>
 #include <atomic>
 #include <cassert>
+#include <cerrno>
 #include <cmath>
+#include <cstdio>
 
 using namespace mumble;
 static std::atomic<int> receivedVoice{0}, receivedTalkStop{0};
@@ -51,8 +53,11 @@ static bool readExact(SSL *ssl, void *buffer, size_t size) {
     while (size) { int count=SSL_read(ssl,bytes,(int)size); if (count<=0) return false; bytes+=count; size-=(size_t)count; }
     return true;
 }
-static std::pair<uint16_t,Buf> readPacket(SSL *ssl) {
-    tcp::NetHeader header; assert(readExact(ssl,&header,sizeof(header)));
+static std::pair<uint16_t,Buf> readPacket(SSL *ssl, const char *stage) {
+    tcp::NetHeader header;
+    bool received=readExact(ssl,&header,sizeof(header));
+    if (!received) fprintf(stderr,"TLS packet header missing during %s (errno %d)\n",stage,errno);
+    assert(received);
     Buf data(Endian::toHost(header.size)); assert(data.size()<8*1024*1024);
     assert(readExact(ssl,data.data(),data.size())); return {Endian::toHost(header.type),std::move(data)};
 }
@@ -201,8 +206,8 @@ static int runTransport(bool modern) { @autoreleasepool {
             assert(std::string(SSL_get_servername(ssl,TLSEXT_NAMETYPE_host_name))=="127.0.0.1");
             if (attempt!=1) { uint8_t byte; assert(SSL_read(ssl,&byte,1)<=0); }
             else {
-                auto version=readPacket(ssl); assert(version.first==0);
-                auto auth=readPacket(ssl); assert(auth.first==2); MumbleTCP::Authenticate parsed;
+                auto version=readPacket(ssl,"version"); assert(version.first==0);
+                auto auth=readPacket(ssl,"authentication"); assert(auth.first==2); MumbleTCP::Authenticate parsed;
                 assert(parsed.ParseFromArray(auth.second.data(),(int)auth.second.size()) && parsed.username()=="Test User" && parsed.opus() && parsed.tokens_size()==1);
                 MumbleTCP::Version ver; ver.set_version_v2(Version(1,modern?5:4,0).blob64()); sendProto(ssl,ver);
                 MumbleTCP::ChannelState channel; channel.set_channel_id(0); channel.set_name("Root"); sendProto(ssl,channel);
@@ -210,10 +215,10 @@ static int runTransport(bool modern) { @autoreleasepool {
                 MumbleTCP::UserState user; user.set_session(1); user.set_name("Test User"); user.set_channel_id(0); user.set_self_mute(true); sendProto(ssl,user);
                 user.Clear(); user.set_session(2); user.set_name("Peer"); user.set_channel_id(7); sendProto(ssl,user);
                 MumbleTCP::ServerSync sync; sync.set_session(1); sync.set_welcome_text("Welcome"); sendProto(ssl,sync);
-                auto join=readPacket(ssl); assert(join.first==9); MumbleTCP::UserState move; assert(move.ParseFromArray(join.second.data(),(int)join.second.size()) && move.channel_id()==7);
+                auto join=readPacket(ssl,"channel join"); assert(join.first==9); MumbleTCP::UserState move; assert(move.ParseFromArray(join.second.data(),(int)join.second.size()) && move.channel_id()==7);
                 move.Clear(); move.set_session(1); move.set_channel_id(7); sendProto(ssl,move,true);
-                auto outgoingText=readPacket(ssl); assert(outgoingText.first==11); MumbleTCP::TextMessage sent; assert(sent.ParseFromArray(outgoingText.second.data(),(int)outgoingText.second.size()) && sent.message()=="hello &amp; world" && sent.channel_id(0)==7);
-                auto outgoingVoice=readPacket(ssl); assert(outgoingVoice.first==1 && !outgoingVoice.second.empty());
+                auto outgoingText=readPacket(ssl,"text message"); assert(outgoingText.first==11); MumbleTCP::TextMessage sent; assert(sent.ParseFromArray(outgoingText.second.data(),(int)outgoingText.second.size()) && sent.message()=="hello &amp; world" && sent.channel_id(0)==7);
+                auto outgoingVoice=readPacket(ssl,"outgoing voice"); assert(outgoingVoice.first==1 && !outgoingVoice.second.empty());
                 if (modern) {
                     udp::NetHeader header; header.type=std::to_integer<uint8_t>(outgoingVoice.second[0]);
                     udp::Pack packet(header,(uint32_t)outgoingVoice.second.size()-1); std::copy(outgoingVoice.second.begin()+1,outgoingVoice.second.end(),packet.data().begin());
@@ -242,17 +247,20 @@ static int runTransport(bool modern) { @autoreleasepool {
                 std::this_thread::sleep_for(std::chrono::milliseconds(80));
                 auto wakeStarted=std::chrono::steady_clock::now();
                 dispatch_async(dispatch_get_main_queue(), ^{ [model sendTextMessage:[MLTextMessage messageWithPlainText:@"idle wake"] toChannel:[model channelWithId:7]]; });
-                auto idleText=readPacket(ssl);
+                auto idleText=readPacket(ssl,"idle transport wake");
                 assert(idleText.first==11 && sent.ParseFromArray(idleText.second.data(),(int)idleText.second.size()) && sent.message()=="idle wake");
                 assert(std::chrono::steady_clock::now()-wakeStarted<std::chrono::milliseconds(250));
                 if (modern) {
                     // Echo two real keepalives across a quiet interval; the connection must remain usable.
-                    auto firstPing=readPacket(ssl); MumbleTCP::Ping keepalive;
+                    // The first ping can also use the quiet interval if the
+                    // active-voice window expires before the worker wakes.
+                    // Allow 15 seconds plus scheduling headroom for both pings.
+                    timeval keepaliveTimeout{20,0}; setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&keepaliveTimeout,sizeof(keepaliveTimeout));
+                    auto firstPing=readPacket(ssl,"first quiet keepalive"); MumbleTCP::Ping keepalive;
                     assert(firstPing.first==3 && keepalive.ParseFromArray(firstPing.second.data(),(int)firstPing.second.size()));
                     sendProto(ssl,keepalive);
                     auto firstPingAt=std::chrono::steady_clock::now();
-                    timeval keepaliveTimeout{20,0}; setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&keepaliveTimeout,sizeof(keepaliveTimeout));
-                    auto secondPing=readPacket(ssl);
+                    auto secondPing=readPacket(ssl,"second quiet keepalive");
                     auto interval=std::chrono::steady_clock::now()-firstPingAt;
                     assert(secondPing.first==3 && interval>=std::chrono::seconds(14) && interval<std::chrono::seconds(18));
                     assert(keepalive.ParseFromArray(secondPing.second.data(),(int)secondPing.second.size())); sendProto(ssl,keepalive);
