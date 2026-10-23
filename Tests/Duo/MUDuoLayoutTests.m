@@ -19,6 +19,27 @@ static NSString *Path(NSString *name) {
     return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:name];
 }
 static NSString *MUDuoRect(CGRect rect) { return NSStringFromCGRect(rect); }
+
+@interface MUDuoPresentationRoot : MUServerRootViewController
+@property(nonatomic, copy) NSArray<NSString *> *initialLayoutFailures;
+@end
+@implementation MUDuoPresentationRoot
+- (void)viewIsAppearing:(BOOL)animated {
+    [super viewIsAppearing:animated];
+    NSMutableArray *failures = [NSMutableArray array];
+    BOOL needsSide = self.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified ||
+        MIN(self.view.window.bounds.size.width, self.view.window.bounds.size.height) >= 600;
+    if (needsSide && ![[self valueForKey:@"_usingSideVoiceControls"] boolValue])
+        [failures addObject:@"First appearance uses the compact voice controls before adapting"];
+    for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
+        if (region.frame.size.width > region.frame.size.height && self.view.bounds.size.width >= 669 && self.view.bounds.size.height >= 669 &&
+            ![[self valueForKey:@"_usingFoldedControls"] boolValue])
+            [failures addObject:@"First appearance delays the tabletop arrangement until presentation finishes"];
+    }
+    self.initialLayoutFailures = failures;
+}
+@end
+
 static void Run(void) {
     method_setImplementation(class_getInstanceMethod(MLAudio.class, @selector(start)), (IMP)NoAudioStart);
     UIWindowScene *scene = (id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;
@@ -34,7 +55,7 @@ static void Run(void) {
         MLChannel *room = [MLChannel new]; room.channelId = i; room.channelName = [NSString stringWithFormat:@"Voice room %02lu", (unsigned long)i]; room.parent = model.rootChannel;
         [[model.rootChannel valueForKey:@"childStorage"] addObject:room];
     }
-    MUServerRootViewController *root = [[MUServerRootViewController alloc] initWithConnection:connection andServerModel:model];
+    MUDuoPresentationRoot *root = [[MUDuoPresentationRoot alloc] initWithConnection:connection andServerModel:model];
     MUMessagesViewController *messages = [root valueForKey:@"_messagesView"];
     MUServerViewController *server = [root valueForKey:@"_serverView"];
     for (NSUInteger i = 0; i < 20; i++) [messages serverModel:model textMessageReceived:[MLTextMessage messageWithPlainText:i == 19 ? @"Channels and messages stay together as the display changes. The connection and microphone are independent of this layout." : [NSString stringWithFormat:@"Message %lu — keeping the current channel and conversation.", (unsigned long)i + 1]] fromUser:alice];
@@ -110,7 +131,30 @@ static void Run(void) {
             CGRect serverRect = [server.view convertRect:server.view.bounds toView:window];
             CGRect messageRect = [messages.view convertRect:messages.view.bounds toView:window];
             CGRect dockRect = dock ? [dock convertRect:dock.bounds toView:window] : CGRectZero;
+            CGRect messageContent = [messages.view convertRect:messages.view.safeAreaLayoutGuide.layoutFrame toView:window];
             NSMutableArray *failures = [NSMutableArray array];
+            if (!root.initialLayoutFailures) [failures addObject:@"Initial appearance was not checked"];
+            [failures addObjectsFromArray:root.initialLayoutFailures ?: @[]];
+            NSMutableArray *occlusions = [NSMutableArray array];
+            UIButton *sideMenu = [root valueForKey:@"_sideMenuButton"];
+            CGRect menuRect = sideMenu && !sideMenu.hidden ? [sideMenu convertRect:sideMenu.bounds toView:window] : CGRectZero;
+            for (UIViewReservedRegion *region in [root.view reservedRegionsOfKind:UIViewReservedRegionKind.occlusionRegionKind]) {
+                CGRect rect = [root.view convertRect:region.frame toView:window];
+                [occlusions addObject:MUDuoRect(rect)];
+                if (!CGRectIsEmpty(CGRectIntersection(rect, dockRect))) [failures addObject:@"Voice controls overlap a camera or system occlusion"];
+                if (!CGRectIsEmpty(CGRectIntersection(rect, menuRect))) [failures addObject:@"Server menu overlaps a camera or system occlusion"];
+            }
+            BOOL sideVoiceControls = [[root valueForKey:@"_usingSideVoiceControls"] boolValue];
+            if (sideVoiceControls && root.traitCollection.verticalBarEdge == UIVerticalBarEdgeUnspecified) {
+                if (CGRectIsEmpty(menuRect) || fabs(CGRectGetMidX(menuRect) - CGRectGetMidX(dockRect)) > 1)
+                    [failures addObject:@"Portrait server menu is not in the right control rail"];
+                UIViewController *container = [root valueForKey:@"_conversationContainer"];
+                if (container.navigationItem.additionalOverflowItems) [failures addObject:@"Portrait has a duplicate navigation overflow menu"];
+            }
+            if (sideVoiceControls && (!dock || !server.voiceControlsAtSide || !controls))
+                [failures addObject:@"Side voice controls disappear during a posture or pane change"];
+            if (sideVoiceControls && ![(UITextView *)[messages valueForKey:@"_textView"] isFirstResponder] && CGRectGetMinY(dockRect) < CGRectGetMidY([root.view convertRect:root.view.safeAreaLayoutGuide.layoutFrame toView:window]))
+                [failures addObject:@"Side voice controls moved into the upper half of the display"];
             if ([root valueForKey:@"_connection"] != connection || [root valueForKey:@"_model"] != model) [failures addObject:@"Connection/model replaced during layout"];
             if (audioStarts) [failures addObject:@"Layout started microphone capture"];
             if (changedHiddenTree && ![[server valueForKey:@"_modelRefreshScheduled"] boolValue]) {
@@ -120,7 +164,7 @@ static void Run(void) {
             }
             if (wide && (!server.view.window || !messages.view.window || CGRectIntersection(serverRect, messageRect).size.width > 1)) [failures addObject:@"Native panes overlap or disappear"];
             UISegmentedControl *segments = [root valueForKey:@"_segmentedControl"];
-            if (folded && (messages.view.hidden || CGRectIsEmpty(messages.view.bounds) || !CGRectIsEmpty(CGRectIntersection(messageRect, controlsRect)))) [failures addObject:@"Folded messages and controls overlap or disappear"];
+            if (folded && (messages.view.hidden || CGRectIsEmpty(messages.view.bounds) || !CGRectIsEmpty(CGRectIntersection(messageContent, controlsRect)))) [failures addObject:@"Folded messages and controls overlap or disappear"];
             if (folded && (!dock || CGRectIsEmpty(controlsRect) || !CGRectIsEmpty(CGRectIntersection(serverRect, controlsRect)))) [failures addObject:@"Folded channels and controls overlap or disappear"];
             if (!wide && !folded && !(segments.selectedSegmentIndex == 1 ? messages.view.window : server.view.window)) [failures addObject:@"Compact content disappeared during reparenting"];
             CGRect usable = [root.view convertRect:root.view.safeAreaLayoutGuide.layoutFrame toView:window];
@@ -146,7 +190,7 @@ static void Run(void) {
                 if (!CGRectContainsRect(CGRectInset(messageRect, -1, -1), composerRect)) [failures addObject:@"Message composer escapes the visible conversation pane"];
             }
             if (!wide && !folded && !CGRectContainsRect(CGRectInset(selected, -2, -2), usable)) [failures addObject:@"Compact content does not fill the usable display"];
-            if (dock && !CGRectContainsRect(CGRectInset(folded ? controlsRect : serverRect, -2, -2), dockRect)) [failures addObject:@"Voice controls escape their assigned pane"];
+            if (dock && !CGRectContainsRect(CGRectInset(controls ? controlsRect : serverRect, -2, -2), dockRect)) [failures addObject:@"Voice controls escape their assigned pane"];
             if (armed && (![[[messages valueForKey:@"_textView"] text] isEqual:@"Draft survives folding and resizing"] || [messages valueForKey:@"_pendingPhoto"] != draftPhoto)) [failures addObject:@"Draft text/photo lost during reparenting"];
             for (UIViewReservedRegion *region in [root.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
                 CGRect rect = [root.view convertRect:region.frame toView:window];
@@ -156,7 +200,7 @@ static void Run(void) {
                     BOOL rtl = root.view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
                     CGRect leading = rtl ? messageRect : serverRect, trailing = rtl ? serverRect : messageRect;
                     if (CGRectGetMaxX(leading) > CGRectGetMinX(rect) + 1 || CGRectGetMinX(trailing) < CGRectGetMaxX(rect) - 1) [failures addObject:@"Book panes do not follow leading Server / trailing Messages order"];
-                    if (folded || controls) [failures addObject:@"Book posture moved server controls into Messages"];
+                    if (folded) [failures addObject:@"Book posture moved server controls into Messages"];
                 }
                 if (!CGRectIsEmpty(CGRectIntersection(rect, dockRect))) [failures addObject:@"Voice controls cross the active fold"];
             }
@@ -187,8 +231,11 @@ static void Run(void) {
                 if (!CGRectIsNull(systemKeyboardFrame)) keyboard = [window convertRect:systemKeyboardFrame fromCoordinateSpace:window.windowScene.screen.coordinateSpace];
                 if (CGRectGetMaxY(button) > CGRectGetMinY(keyboard) + 1) [failures addObject:@"Message composer is covered by the keyboard"];
             }
-            NSDictionary *state = @{@"window":MUDuoRect(window.bounds), @"orientation":@(window.windowScene.effectiveGeometry.interfaceOrientation), @"safe":MUDuoRect(root.view.safeAreaLayoutGuide.layoutFrame), @"wide":@(wide), @"foldedControls":@(folded), @"book":@(book), @"rtl":@(root.view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft), @"controls":MUDuoRect(controlsRect), @"messagesHidden":@(messages.view.hidden), @"presented":@(root.presentingViewController != nil), @"server":MUDuoRect(serverRect), @"messages":MUDuoRect(messageRect), @"dock":MUDuoRect(dockRect), @"draft":@(armed), @"keyboardFrame":MUDuoRect(systemKeyboardFrame), @"rootKeyboardFrame":MUDuoRect(root.view.keyboardLayoutGuide.layoutFrame), @"messageKeyboardFrame":MUDuoRect(messages.view.keyboardLayoutGuide.layoutFrame), @"appState":@(UIApplication.sharedApplication.applicationState), @"sceneState":@(window.windowScene.activationState), @"rootHasKeyboardFrame":[root valueForKey:@"_hasKeyboardFrame"], @"selection":@(segments.selectedSegmentIndex), @"rows":@([[server valueForKey:@"_modelItems"] count]), @"forceTransmit":@(MLAudio.sharedAudio.forceTransmit), @"keyboard":@([(UITextView *)[messages valueForKey:@"_textView"] isFirstResponder]), @"failures":failures};
-            NSData *json = [NSJSONSerialization dataWithJSONObject:state options:NSJSONWritingPrettyPrinted error:nil];
+            NSDictionary *state = @{@"verticalBarEdge":@(root.traitCollection.verticalBarEdge), @"serverVerticalBarEdge":@(server.traitCollection.verticalBarEdge), @"sideVoiceControls":@(sideVoiceControls), @"window":MUDuoRect(window.bounds), @"orientation":@(window.windowScene.effectiveGeometry.interfaceOrientation), @"safe":MUDuoRect(root.view.safeAreaLayoutGuide.layoutFrame), @"wide":@(wide), @"foldedControls":@(folded), @"book":@(book), @"rtl":@(root.view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft), @"controls":MUDuoRect(controlsRect), @"messagesHidden":@(messages.view.hidden), @"presented":@(root.presentingViewController != nil), @"server":MUDuoRect(serverRect), @"messages":MUDuoRect(messageRect), @"dock":MUDuoRect(dockRect), @"draft":@(armed), @"keyboardFrame":MUDuoRect(systemKeyboardFrame), @"rootKeyboardFrame":MUDuoRect(root.view.keyboardLayoutGuide.layoutFrame), @"messageKeyboardFrame":MUDuoRect(messages.view.keyboardLayoutGuide.layoutFrame), @"appState":@(UIApplication.sharedApplication.applicationState), @"sceneState":@(window.windowScene.activationState), @"rootHasKeyboardFrame":[root valueForKey:@"_hasKeyboardFrame"], @"selection":@(segments.selectedSegmentIndex), @"rows":@([[server valueForKey:@"_modelItems"] count]), @"forceTransmit":@(MLAudio.sharedAudio.forceTransmit), @"keyboard":@([(UITextView *)[messages valueForKey:@"_textView"] isFirstResponder]), @"failures":failures};
+            NSMutableDictionary *geometry = [state mutableCopy];
+            geometry[@"occlusions"] = occlusions;
+            geometry[@"sideMenu"] = MUDuoRect(menuRect);
+            NSData *json = [NSJSONSerialization dataWithJSONObject:geometry options:NSJSONWritingPrettyPrinted error:nil];
             NSString *signature = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
             if (![signature isEqual:lastState]) {
                 lastState = signature; [json writeToFile:Path(@"duo-state.json") atomically:YES];

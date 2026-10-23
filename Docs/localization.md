@@ -2,7 +2,7 @@
 
 The app includes 12 languages: English, Simplified Chinese, Traditional Chinese, Japanese, Korean, German, French, Spanish, Brazilian Portuguese, Italian, Russian, and Danish.
 
-Each language contains 299 interface strings, plus microphone and local-network permission descriptions. Coverage includes Home, servers, messages, audio settings, initial setup, certificates, access tokens, connection errors, and accessibility labels. Foundation supplies public-server country names in the app's selected language; continent names use app translations. Server and user names, messages, and server-provided rejection reasons remain in their original language. License notices retain their original text.
+Each language contains 298 interface strings, plus microphone and local-network permission descriptions. Coverage includes Home, servers, messages, audio settings, initial setup, certificates, access tokens, connection errors, and accessibility labels. Foundation supplies public-server country names in the app's selected language; continent names use app translations. Server and user names, messages, and server-provided rejection reasons remain in their original language. License notices retain their original text.
 
 Xcode packages the language resources through `Localizable.strings` and `InfoPlist.strings` variant groups. The development language is `en`, and `UIPrefersShowingLanguageSettings` enables the system's per-app language setting. The app uses Foundation's standard language selection and follows the system's preferred languages by default. It does not write `AppleLanguages` or add a custom language override.
 

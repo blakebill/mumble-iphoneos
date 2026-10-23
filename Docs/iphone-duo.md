@@ -6,13 +6,15 @@ References: Apple's [Duo design guidelines](https://developer.apple.com/design/h
 
 ## Conversation layout
 
+The initial arrangement is resolved in `viewIsAppearing:` using the scene's installed traits, safe area and reserved regions. Layout updates remain enabled during presentation, so entering a server does not briefly show the compact interface before adapting. The fixture checks this before the presentation animation finishes.
+
 On iOS 27.1, one `UIArrangementViewController` owns the existing channel and message controllers throughout the connection. `UISplitArrangement` supports horizontal and vertical arrangements and uses system division regions to keep panes clear of an active fold.
 
 - Without an active division, at least 720 points of usable width and 280 points of height enables channels and messages side by side.
-- With a horizontal division, Server shows channels above the fold and a shared message and voice control surface below it when there are at least 360 points of usable width and 260 points on each side. The lower pane keeps message history and its composer above a separate glass voice dock.
-- With a vertical division (book posture), Server remains in the leading pane and Messages in the trailing pane, with native equal regions around the fold. Voice controls remain with Server. Admission uses the same 280/320-point leading/trailing width minima as the native split and at least 280 points of usable height. The reading order follows the interface language.
+- With a horizontal division, Server shows channels above the fold and the conversation below it when there are at least 360 points of usable width and 260 points on each side. Voice controls remain in the shared lower-right rail.
+- With a vertical division (book posture), Server remains in the leading pane and Messages in the trailing pane, with native equal regions around the fold. Voice controls remain in the scene-level right rail. Admission uses the same 280/320-point leading/trailing width minima as the native split and at least 280 points of usable height. The reading order follows the interface language.
 - Smaller windows show the selected Server or Messages pane across the available area. Native placement dimensions collapse the other pane without transferring its controller to a different parent.
-- Side-by-side layouts show accessible, Dynamic Type pane headings instead of a shared Server/Messages selector over the fold. The selector remains available in compact and tabletop layouts. Selecting Messages shows the conversation in a native pane clear of the division; its composer stays inside that pane and above the system keyboard. Returning to Server restores the combined message/control pane. An active message field remains selected when folding. The keyboard reduces the usable height for both unfolded and book splits; typing alone does not collapse book posture when both panes still fit. Dismissing the keyboard restores the split if it had to collapse.
+- Side-by-side layouts show accessible, Dynamic Type pane headings instead of a shared Server/Messages selector over the fold. The selector remains available in compact and tabletop layouts. Selecting Messages shows the conversation in a native pane clear of the division; its composer stays inside that pane and above the system keyboard. Returning to Server restores the split channel/message layout. An active message field remains selected when folding. The keyboard reduces the usable height for both unfolded and book splits; typing alone does not collapse book posture when both panes still fit. Dismissing the keyboard restores the split if it had to collapse.
 - The connection, server model, recipient, draft text, and pending image are reused. Layout changes do not start or restart audio capture. An active message field keeps its focus when the layout changes.
 - A pane with zero area skips channel-tree refreshes and message insertion animations. Channels catch up when their pane expands again.
 
@@ -20,7 +22,13 @@ Navigation and tab bars remain UIKit controls, including their system-managed ve
 
 ## Controls and presentation
 
-The voice dock belongs to the channel pane's local container in ordinary layouts. Only in the horizontal-fold tabletop layout, the same dock moves to a footer in the secondary conversation pane. The footer measures the existing dock and reserves its safe-area padding; message history and the composer fill the remaining area above it. That surface reuses the existing mute, deafen, and PTT actions. It does not create a second audio owner. Channel rows no longer reserve bottom space for an overlaid dock while the controls have their own pane. It follows that container's safe area and keyboard guide, includes space for the labels, and limits the PTT bar to 600 points. The message composer is centered with a maximum width of 720 points and follows the enclosing navigation controller's native keyboard guide. Short windows place a 44-point image thumbnail beside the text instead of placing a 96-point preview above it. The text field scrolls when its content exceeds the remaining height. Message reflow preserves the visible history anchor when the user is reading older messages.
+Voice buttons use SF Symbols without Mic/Audio captions on every device; accessibility labels and muted-state announcements remain available. Ordinary iPhone layouts retain their floating controls and wide PTT bar.
+
+The side rail uses 44-by-44-point buttons with 20-point symbols, 12 points between buttons, and 10 points of container padding. This keeps their scale consistent with nearby navigation controls while preserving a full touch target. Ordinary floating controls use 22-point symbols.
+
+Duo-size and native vertical-bar windows use one scene-level rail at the lower right in closed, open, tabletop and book layouts. The same two native glass buttons reuse Self-Mute/Self-Deafen and server restrictions. In PTT mode the microphone becomes a hold-to-speak target; release, cancellation and geometry changes end transmission. Switching to Messages keeps these controls available. The rail stays clear of the keyboard, active fold and system occlusion regions, including the outer camera and Dynamic Island after rotation. It reserves content space when UIKit does not already reserve a right-hand bar. On the inner portrait display, the server menu uses a native glass menu button in the upper right rail; vertical system bars retain their native overflow menu. The rail is not attached to either conversation pane and does not create another audio owner.
+
+The message composer is centered with a maximum width of 720 points and follows the enclosing navigation controller's keyboard guide. Short windows put a 44-point image thumbnail beside the text instead of a 96-point preview above it. Text scrolls when it exceeds the remaining height, and message reflow preserves the reader's visible history anchor.
 
 Resizing the channel pane, switching the selected pane, or deactivating its scene releases PTT. These actions do not stop a connected voice-activated conversation. Certificate alerts and queued server notices use their originating controller and scene instead of searching globally for a key window.
 
@@ -50,9 +58,10 @@ Validated on the iOS 27.1 Duo Simulator:
 
 - Closed and open layouts, with text and image drafts preserved.
 - Keyboard focus across closing/opening, with voice controls above the keyboard.
-- Book posture keeps Server/voice controls in the leading pane and Messages in the trailing pane, with both titles clear of the hinge and side bars. Tabletop keeps channels above and messages/voice controls below; the composer and footer must not overlap. Explicit Messages selection and returning to Server are checked separately.
+- Book posture keeps Server in the leading pane and Messages in the trailing pane, with voice controls at the lower right, with both titles clear of the hinge and side bars. Tabletop keeps channels above and messages/voice controls below; the composer and footer must not overlap. Explicit Messages selection and returning to Server are checked separately.
 - First connection without rotating, both landscape directions, keyboard-visible book layout, reading-direction changes, and native overflow menu availability.
 - Held PTT released after a geometry change.
+- Closed landscape controls avoid the camera and status region when they move to the lower right. The inner portrait server menu remains in the right rail without a duplicate navigation overflow button.
 - Original connection/model identity and no audio start from layout changes.
 - Hidden channel updates deferred until the pane becomes visible, then reflected in the table.
 - Both portrait and landscape compact chat fill the usable display.

@@ -68,7 +68,8 @@
 }
 - (void)updateContent {
     _controlsView.hidden = !_showsVoiceControls;
-    _server.voiceControlsHostView = _showsVoiceControls ? _controlsView : nil;
+    if (_showsVoiceControls) _server.voiceControlsHostView = _controlsView;
+    else if (_server.voiceControlsHostView == _controlsView) _server.voiceControlsHostView = nil;
     [self.view setNeedsLayout];
 }
 - (void)viewDidLayoutSubviews {
@@ -106,6 +107,8 @@
     UIBarButtonItem             *_menuButton;
     UIDeferredMenuElement       *_menuActions;
     UIBarButtonItem             *_disconnectButton;
+    UIView                      *_sideVoiceControls;
+    UIButton                    *_sideMenuButton;
 
     MUServerViewController      *_serverView;
     MUMessagesViewController    *_messagesView;
@@ -113,7 +116,7 @@
     NSInteger                   _unreadMessages;
     UIViewController            *_conversationContainer;
     MUServerSecondaryViewController *_secondaryView;
-    BOOL                         _showingBothPanes, _usingFoldedControls, _usingBookLayout, _updatingLayout;
+    BOOL                         _showingBothPanes, _usingFoldedControls, _usingBookLayout, _usingSideVoiceControls, _updatingLayout;
     CGRect                       _keyboardFrameInScreen;
     BOOL                         _hasKeyboardFrame;
 
@@ -121,6 +124,7 @@
 - (NSArray<UIMenuElement *> *)serverMenuActions;
 - (void)updateConversationLayout;
 - (void)updateNativeArrangement;
+- (void)layoutSideVoiceControls;
 @end
 
 @implementation MUServerRootViewController
@@ -159,6 +163,16 @@
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardFrameWillChange:) name:UIKeyboardWillChangeFrameNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardFrameWillChange:) name:UIKeyboardWillShowNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardFrameWillChange:) name:UIKeyboardWillHideNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(voiceModeDidChange:) name:MUAudioTransmissionModeDidChangeNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(voiceModeDidChange:) name:MLAudioDidRestartNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(voiceSceneWillDeactivate:) name:UISceneWillDeactivateNotification object:nil];
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        [self registerForTraitChanges:UITraitCollection.systemTraitsAffectingVerticalBarEdge withHandler:^(__kindof MUServerRootViewController *controller, UITraitCollection *previousTraits) {
+            [controller.view setNeedsLayout];
+        }];
+    }
+#endif
 
     _segmentedControl = [[UISegmentedControl alloc] initWithItems:
                          [NSArray arrayWithObjects:
@@ -212,15 +226,14 @@
     self.toolbar.barStyle = UIBarStyleDefault;
 }
 
-- (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-    // Presentation can finish without another layout pass. Reconcile after its
-    // coordinator clears, using the final window geometry and division regions.
-    __weak MUServerRootViewController *weakSelf = self;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [weakSelf updateConversationLayout];
-        [weakSelf.viewIfLoaded setNeedsLayout];
-    });
+- (void)viewIsAppearing:(BOOL)animated {
+    [super viewIsAppearing:animated];
+    // UIKit has installed the scene's traits, safe area and reserved regions
+    // before the first visible frame. Resolve the arrangement during entry,
+    // rather than switching from the compact layout after presentation.
+    [self updateConversationLayout];
+    [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
 }
 
 - (void)viewSafeAreaInsetsDidChange {
@@ -232,6 +245,7 @@
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     [self updateConversationLayout];
+    [self layoutSideVoiceControls];
 }
 
 static UIView *MUFirstResponderInView(UIView *view) {
@@ -250,13 +264,27 @@ static UIView *MUFirstResponderInView(UIView *view) {
     [self.view setNeedsLayout];
 }
 
+- (void)voiceModeDidChange:(NSNotification *)notification {
+    if (_usingSideVoiceControls) [_serverView refreshVoiceControls];
+    [self.viewIfLoaded setNeedsLayout];
+}
+
+- (void)voiceSceneWillDeactivate:(NSNotification *)notification {
+    if (notification.object == self.viewIfLoaded.window.windowScene) [_serverView cancelPushToTalk];
+}
+
 - (void)updateConversationLayout {
-    if (_updatingLayout || !self.view.window || self.viewControllers.count != 1 || self.transitionCoordinator) return;
-    BOOL wide = NO, foldedControls = NO, bookLayout = NO;
+    if (_updatingLayout || !self.view.window || self.viewControllers.count != 1) return;
+    BOOL wide = NO, foldedControls = NO, bookLayout = NO, sideVoiceControls = NO;
     UIView *responder = MUFirstResponderInView(_messagesView.viewIfLoaded);
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
     if (@available(iOS 27.1, *)) {
+        BOOL verticalTrailing = self.traitCollection.verticalBarEdge == UIVerticalBarEdgeTrailing;
+        sideVoiceControls = self.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified ||
+            MIN(self.view.window.bounds.size.width, self.view.window.bounds.size.height) >= 600;
+        CGFloat railInset = sideVoiceControls && !verticalTrailing ? 84 : 0;
         CGRect usable = self.view.safeAreaLayoutGuide.layoutFrame;
+        usable.size.width = MAX(0, usable.size.width - railInset);
         CGFloat availableBottom = CGRectGetMaxY(usable);
         if (responder) {
             availableBottom = MIN(availableBottom, CGRectGetMinY(self.view.keyboardLayoutGuide.layoutFrame));
@@ -272,6 +300,11 @@ static UIView *MUFirstResponderInView(UIView *view) {
         for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
             CGRect division = region.frame;
             if (CGRectIsEmpty(CGRectIntersection(usable, division))) continue;
+            sideVoiceControls = YES;
+            if (!verticalTrailing && railInset == 0) {
+                railInset = 84;
+                usable.size.width = MAX(0, usable.size.width - railInset);
+            }
             if (division.size.width > division.size.height) {
                 // Tabletop: visible channels above, conversation and controls below.
                 wide = NO;
@@ -291,10 +324,16 @@ static UIView *MUFirstResponderInView(UIView *view) {
             }
             break;
         }
+        UIEdgeInsets insets = _conversationContainer.additionalSafeAreaInsets;
+        if (insets.right != railInset) {
+            insets.right = railInset;
+            _conversationContainer.additionalSafeAreaInsets = insets;
+        }
+
     }
 #endif
     if (wide == _showingBothPanes && foldedControls == _usingFoldedControls && bookLayout == _usingBookLayout &&
-        _segmentIndex == _segmentedControl.selectedSegmentIndex) return;
+        sideVoiceControls == _usingSideVoiceControls && _segmentIndex == _segmentedControl.selectedSegmentIndex) return;
     _updatingLayout = YES;
     [MLAudio.sharedAudio setForceTransmit:NO];
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
@@ -302,6 +341,7 @@ static UIView *MUFirstResponderInView(UIView *view) {
         _showingBothPanes = wide;
         _usingFoldedControls = foldedControls;
         _usingBookLayout = bookLayout;
+        _usingSideVoiceControls = sideVoiceControls;
         if (wide) {
             _conversationContainer.navigationItem.titleView = nil;
             _conversationContainer.navigationItem.title = nil;
@@ -330,7 +370,16 @@ static UIView *MUFirstResponderInView(UIView *view) {
 - (void)updateNativeArrangement {
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
     if (@available(iOS 27.1, *)) {
-        _secondaryView.showsVoiceControls = _usingFoldedControls;
+        _serverView.voiceControlsAtSide = _usingSideVoiceControls;
+        if (_usingSideVoiceControls && !_sideVoiceControls) {
+            _sideVoiceControls = [UIView new];
+            [self.view addSubview:_sideVoiceControls];
+        }
+        _sideVoiceControls.hidden = !_usingSideVoiceControls;
+        _conversationContainer.navigationItem.pinnedTrailingGroup = nil;
+        _secondaryView.showsVoiceControls = _usingFoldedControls && !_usingSideVoiceControls;
+        _serverView.voiceControlsHostView = _usingSideVoiceControls ? _sideVoiceControls : nil;
+        [self layoutSideVoiceControls];
         _secondaryView.showsPaneTitle = _showingBothPanes;
         _serverView.showsPaneTitle = _showingBothPanes;
         BOOL splitPanes = _showingBothPanes || _usingFoldedControls;
@@ -359,6 +408,83 @@ static UIView *MUFirstResponderInView(UIView *view) {
         [(UIArrangementViewController *)_conversationContainer updateArrangement:split animated:NO];
     }
 #endif
+}
+
+// This scene owns one lower-right control surface, independent of either pane.
+- (void)layoutSideVoiceControls {
+    if (!_usingSideVoiceControls || !_sideVoiceControls) {
+        _sideMenuButton.hidden = YES;
+        return;
+    }
+    CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
+    CGFloat bottom = CGRectGetMaxY(safe) - 8;
+    if (MUFirstResponderInView(_messagesView.viewIfLoaded)) {
+        bottom = MIN(bottom, CGRectGetMinY(self.view.keyboardLayoutGuide.layoutFrame) - 8);
+        if (_hasKeyboardFrame) {
+            CGRect keyboard = [self.view convertRect:_keyboardFrameInScreen fromCoordinateSpace:self.view.window.windowScene.screen.coordinateSpace];
+            if (!CGRectIsEmpty(CGRectIntersection(safe, keyboard))) bottom = MIN(bottom, CGRectGetMinY(keyboard) - 8);
+        }
+    }
+    CGFloat height = 136;
+    CGFloat x = CGRectGetMaxX(self.view.bounds) - MAX(84, self.view.safeAreaInsets.right) + 10;
+    CGRect controls = CGRectMake(x, MAX(CGRectGetMinY(safe) + 8, bottom - height), 64, height);
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        // Safe-area insets reserve the system bar's width, but do not describe
+        // the camera or Dynamic Island inside that strip. Respect both kinds
+        // of reserved region when placing our custom controls there.
+        NSArray<UIViewReservedRegion *> *obstacles = [[self.view reservedRegionsOfKind:UIViewReservedRegionKind.occlusionRegionKind]
+            arrayByAddingObjectsFromArray:[self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]];
+        for (NSUInteger pass = 0; pass < obstacles.count; pass++) {
+            BOOL moved = NO;
+            for (UIViewReservedRegion *region in obstacles) {
+                if (CGRectIsEmpty(CGRectIntersection(controls, region.frame))) continue;
+                controls.origin.y = CGRectGetMinY(region.frame) - 8 - height;
+                moved = YES;
+            }
+            if (!moved) break;
+        }
+
+        // The inner portrait display keeps a horizontal navigation bar. Put
+        // its server menu in the same right-hand rail as the voice controls.
+        BOOL sideMenu = self.traitCollection.verticalBarEdge == UIVerticalBarEdgeUnspecified;
+        if (sideMenu && !_sideMenuButton) {
+            _sideMenuButton = [UIButton buttonWithType:UIButtonTypeSystem];
+            UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
+            configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+            configuration.image = [UIImage systemImageNamed:@"ellipsis"];
+            configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:20 weight:UIImageSymbolWeightMedium];
+            configuration.contentInsets = NSDirectionalEdgeInsetsMake(10, 8, 10, 8);
+            _sideMenuButton.configuration = configuration;
+            _sideMenuButton.menu = [UIMenu menuWithChildren:@[_menuActions]];
+            _sideMenuButton.showsMenuAsPrimaryAction = YES;
+            _sideMenuButton.accessibilityLabel = NSLocalizedString(@"Server", nil);
+            [self.view addSubview:_sideMenuButton];
+        }
+        _sideMenuButton.hidden = !sideMenu;
+        UINavigationItem *item = _conversationContainer.navigationItem;
+        if (item.additionalOverflowItems != (sideMenu ? nil : _menuActions))
+            item.additionalOverflowItems = sideMenu ? nil : _menuActions;
+        if (sideMenu) {
+            CGRect bar = [self.navigationBar convertRect:self.navigationBar.bounds toView:self.view];
+            CGRect menu = CGRectMake(x + 10, MAX(CGRectGetMinY(safe) + 8, CGRectGetMaxY(bar) + 12), 44, 44);
+            for (NSUInteger pass = 0; pass < obstacles.count; pass++) {
+                BOOL moved = NO;
+                for (UIViewReservedRegion *region in obstacles) {
+                    if (CGRectIsEmpty(CGRectIntersection(menu, region.frame))) continue;
+                    menu.origin.y = CGRectGetMaxY(region.frame) + 8;
+                    moved = YES;
+                }
+                if (!moved) break;
+            }
+            _sideMenuButton.frame = menu;
+            [self.view bringSubviewToFront:_sideMenuButton];
+        }
+    }
+#endif
+    _sideVoiceControls.frame = controls;
+    [self.view bringSubviewToFront:_sideVoiceControls];
+    [_serverView layoutVoiceControls];
 }
 
 - (UIBarButtonItem *)barButtonWithImage:(UIImage *)image action:(SEL)action {

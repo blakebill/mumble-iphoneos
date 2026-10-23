@@ -70,7 +70,6 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     UIButton                         *_talkButton;
     UIStackView                      *_muteControls;
     UIButton                         *_microphoneButton, *_speakerButton;
-    UILabel                          *_microphoneLabel, *_speakerLabel;
     UIVisualEffectView               *_voiceDock;
     UILabel                         *_voiceStatusLabel;
     UIView                          *_channelHeader;
@@ -174,7 +173,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     }
     [self layoutVoiceControls];
     [self resizeChannelHeader];
-    CGFloat bottom = _voiceDock && !_voiceControlsHostView ? ceil(_voiceDock.bounds.size.height) + 24 : 0;
+    CGFloat bottom = _voiceDock && !_voiceControlsHostView ? ceil(_voiceDock.bounds.size.height) + 12 : 0;
     if (self.tableView.contentInset.bottom != bottom) {
         UIEdgeInsets insets = self.tableView.contentInset;
         insets.bottom = bottom;
@@ -246,7 +245,8 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 
 - (void)layoutVoiceControls {
     UIView *host = _voiceControlsHostView ?: self.viewIfLoaded.superview;
-    if (!_viewIsVisible || ![self hasVisibleChannelPane] || CGRectIsEmpty(host.bounds)) {
+    BOOL side = _voiceControlsAtSide && _voiceControlsHostView.window;
+    if ((!side && (!_viewIsVisible || ![self hasVisibleChannelPane])) || CGRectIsEmpty(host.bounds)) {
         if (_voiceDock) [self removeVoiceDock];
         return;
     }
@@ -263,9 +263,17 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     return ceil([_voiceDock systemLayoutSizeFittingSize:UILayoutFittingCompressedSize].height);
 }
 
+- (void)setVoiceControlsAtSide:(BOOL)voiceControlsAtSide {
+    if (_voiceControlsAtSide == voiceControlsAtSide) return;
+    _voiceControlsAtSide = voiceControlsAtSide;
+    [self removeVoiceDock];
+    [self layoutVoiceControls];
+    [self.viewIfLoaded setNeedsLayout];
+}
+
 - (void)installVoiceDock {
     UIView *host = _voiceControlsHostView ?: self.view.superview;
-    if (_voiceDock || !self.view.window || CGRectIsEmpty(self.view.bounds) || CGRectIsEmpty(host.bounds)) return;
+    if (_voiceDock || !host.window || (!_voiceControlsAtSide && CGRectIsEmpty(self.view.bounds)) || CGRectIsEmpty(host.bounds)) return;
     UIVisualEffect *effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterial];
     BOOL supportsGlass = NO;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
@@ -300,6 +308,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     // Give the status its own material: scroll-edge fading alone leaves the
     // upper label overlapping readable channel rows on dense servers.
     UIView *statusRow = [UIView new];
+    statusRow.hidden = _voiceControlsAtSide;
     [statusRow addSubview:statusBadge];
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[statusRow]];
     stack.axis = UILayoutConstraintAxisVertical;
@@ -316,10 +325,12 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 #endif
             configuration = [UIButtonConfiguration grayButtonConfiguration];
         configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-        configuration.image = [MUImage symbolNamed:@"mic.fill" pointSize:27];
-        configuration.title = NSLocalizedString(@"Hold to speak", nil);
-        configuration.imagePadding = 10;
-        configuration.contentInsets = NSDirectionalEdgeInsetsMake(16, 20, 16, 20);
+        CGFloat symbolSize = _voiceControlsAtSide ? 20 : 22;
+        configuration.image = [MUImage symbolNamed:@"mic.fill" pointSize:symbolSize];
+        configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:symbolSize weight:UIImageSymbolWeightMedium];
+        configuration.title = _voiceControlsAtSide ? nil : NSLocalizedString(@"Hold to speak", nil);
+        configuration.imagePadding = _voiceControlsAtSide ? 0 : 10;
+        configuration.contentInsets = _voiceControlsAtSide ? NSDirectionalEdgeInsetsMake(10, 8, 10, 8) : NSDirectionalEdgeInsetsMake(16, 20, 16, 20);
         configuration.titleLineBreakMode = NSLineBreakByWordWrapping;
         UIFont *titleFont = MUServerFont(UIFontTextStyleHeadline, NO, self.traitCollection);
         configuration.titleTextAttributesTransformer = ^NSDictionary<NSAttributedStringKey, id> *(NSDictionary<NSAttributedStringKey, id> *attributes) {
@@ -346,27 +357,28 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
         _speakerButton.configuration = [self muteButtonConfigurationWithSymbol:@"speaker.wave.2.fill" muted:NO];
         [_speakerButton addTarget:self action:@selector(toggleSpeaker:) forControlEvents:UIControlEventTouchUpInside];
         _muteControls = [[UIStackView alloc] initWithArrangedSubviews:@[_talkButton, _speakerButton]];
+        _muteControls.axis = _voiceControlsAtSide ? UILayoutConstraintAxisVertical : UILayoutConstraintAxisHorizontal;
         _muteControls.alignment = UIStackViewAlignmentCenter;
         _muteControls.spacing = 12;
         [stack addArrangedSubview:_muteControls];
         [NSLayoutConstraint activateConstraints:@[
-            [_talkButton.heightAnchor constraintGreaterThanOrEqualToConstant:64],
-            [_speakerButton.widthAnchor constraintEqualToConstant:64],
-            [_speakerButton.heightAnchor constraintEqualToConstant:64]
+            [_talkButton.heightAnchor constraintGreaterThanOrEqualToConstant:_voiceControlsAtSide ? 44 : 64],
+            [_speakerButton.widthAnchor constraintEqualToConstant:_voiceControlsAtSide ? 44 : 64],
+            [_speakerButton.heightAnchor constraintEqualToConstant:_voiceControlsAtSide ? 44 : 64]
         ]];
+        if (_voiceControlsAtSide) {
+            [_talkButton.widthAnchor constraintEqualToConstant:44].active = YES;
+            [_talkButton.heightAnchor constraintEqualToConstant:44].active = YES;
+        }
         [_talkButton addTarget:self action:@selector(talkOn:) forControlEvents:UIControlEventTouchDown];
         [_talkButton addTarget:self action:@selector(talkOff:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
     } else {
         _microphoneButton = [self floatingMuteButtonWithSymbol:@"mic.fill" action:@selector(toggleMicrophone:)];
         _speakerButton = [self floatingMuteButtonWithSymbol:@"speaker.wave.2.fill" action:@selector(toggleSpeaker:)];
-        _microphoneLabel = [self muteControlLabelWithTitle:NSLocalizedString(@"Mic", nil)];
-        _speakerLabel = [self muteControlLabelWithTitle:NSLocalizedString(@"Audio", nil)];
-        _muteControls = [[UIStackView alloc] initWithArrangedSubviews:@[
-            [self muteControlWithButton:_microphoneButton label:_microphoneLabel],
-            [self muteControlWithButton:_speakerButton label:_speakerLabel]
-        ]];
-        _muteControls.alignment = UIStackViewAlignmentTop;
-        _muteControls.spacing = 8;
+        _muteControls = [[UIStackView alloc] initWithArrangedSubviews:@[_microphoneButton, _speakerButton]];
+        _muteControls.axis = _voiceControlsAtSide ? UILayoutConstraintAxisVertical : UILayoutConstraintAxisHorizontal;
+        _muteControls.alignment = UIStackViewAlignmentCenter;
+        _muteControls.spacing = _voiceControlsAtSide ? 12 : 8;
         [stack addArrangedSubview:_muteControls];
     }
     [host addSubview:_voiceDock];
@@ -382,7 +394,7 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
         }
     }
 #endif
-    if (pushToTalk) {
+    if (pushToTalk && !_voiceControlsAtSide) {
         NSLayoutConstraint *fill = [_voiceDock.widthAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.widthAnchor constant:-32];
         fill.priority = UILayoutPriorityDefaultHigh;
         fill.active = YES;
@@ -390,24 +402,30 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
             [_voiceDock.widthAnchor constraintLessThanOrEqualToConstant:600]
         ]];
     }
-    if (_voiceControlsHostView) {
+    if (_voiceControlsAtSide) {
+        [NSLayoutConstraint activateConstraints:@[
+            [_voiceDock.centerYAnchor constraintEqualToAnchor:host.centerYAnchor],
+            [_voiceDock.topAnchor constraintGreaterThanOrEqualToAnchor:host.topAnchor constant:8],
+            [_voiceDock.bottomAnchor constraintLessThanOrEqualToAnchor:host.bottomAnchor constant:-8]
+        ]];
+    } else if (_voiceControlsHostView) {
         [NSLayoutConstraint activateConstraints:@[
             [_voiceDock.centerYAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.centerYAnchor],
             [_voiceDock.topAnchor constraintGreaterThanOrEqualToAnchor:host.safeAreaLayoutGuide.topAnchor constant:12],
             [_voiceDock.bottomAnchor constraintLessThanOrEqualToAnchor:host.safeAreaLayoutGuide.bottomAnchor constant:-12]
         ]];
     } else {
-        [_speakerButton.bottomAnchor constraintEqualToAnchor:host.keyboardLayoutGuide.topAnchor constant:-MAX(40, ceil(MUServerFont(UIFontTextStyleCaption2, NO, self.traitCollection).lineHeight) + 24)].active = YES;
-        [_voiceDock.bottomAnchor constraintLessThanOrEqualToAnchor:host.keyboardLayoutGuide.topAnchor constant:-8].active = YES;
+        [_speakerButton.bottomAnchor constraintEqualToAnchor:host.keyboardLayoutGuide.topAnchor constant:-4].active = YES;
+        [_voiceDock.bottomAnchor constraintLessThanOrEqualToAnchor:host.keyboardLayoutGuide.topAnchor constant:-2].active = YES;
     }
     [NSLayoutConstraint activateConstraints:@[
-        [_voiceDock.centerXAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.centerXAnchor],
-        [_voiceDock.leadingAnchor constraintGreaterThanOrEqualToAnchor:host.safeAreaLayoutGuide.leadingAnchor constant:16],
-        [_voiceDock.trailingAnchor constraintLessThanOrEqualToAnchor:host.safeAreaLayoutGuide.trailingAnchor constant:-16],
+        [_voiceDock.centerXAnchor constraintEqualToAnchor:_voiceControlsAtSide ? host.centerXAnchor : host.safeAreaLayoutGuide.centerXAnchor],
+        [_voiceDock.leadingAnchor constraintGreaterThanOrEqualToAnchor:_voiceControlsAtSide ? host.leadingAnchor : host.safeAreaLayoutGuide.leadingAnchor constant:_voiceControlsAtSide ? 0 : 16],
+        [_voiceDock.trailingAnchor constraintLessThanOrEqualToAnchor:_voiceControlsAtSide ? host.trailingAnchor : host.safeAreaLayoutGuide.trailingAnchor constant:_voiceControlsAtSide ? 0 : -16],
         [stack.leadingAnchor constraintEqualToAnchor:_voiceDock.contentView.leadingAnchor constant:10],
         [stack.trailingAnchor constraintEqualToAnchor:_voiceDock.contentView.trailingAnchor constant:-10],
         [stack.topAnchor constraintEqualToAnchor:_voiceDock.contentView.topAnchor constant:10],
-        [stack.bottomAnchor constraintEqualToAnchor:_voiceDock.contentView.bottomAnchor constant:-10],
+        [stack.bottomAnchor constraintEqualToAnchor:_voiceDock.contentView.bottomAnchor constant:(_voiceControlsAtSide || _voiceControlsHostView) ? -10 : -2],
         [statusRow.widthAnchor constraintEqualToAnchor:stack.widthAnchor],
         [statusBadge.centerXAnchor constraintEqualToAnchor:statusRow.centerXAnchor],
         [statusBadge.leadingAnchor constraintGreaterThanOrEqualToAnchor:statusRow.leadingAnchor],
@@ -429,14 +447,13 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     [_voiceDock removeFromSuperview];
     _voiceDock = nil; _muteControls = nil; _talkButton = nil;
     _microphoneButton = nil; _speakerButton = nil; _voiceStatusLabel = nil;
-    _microphoneLabel = nil; _speakerLabel = nil;
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     _viewIsVisible = NO;
     _modelRefreshScheduled = NO;
-    [self removeVoiceDock];
+    if (!_voiceControlsAtSide) [self removeVoiceDock];
     UIEdgeInsets insets = self.tableView.contentInset; insets.bottom = 0;
     self.tableView.contentInset = insets;
     self.tableView.verticalScrollIndicatorInsets = UIEdgeInsetsZero;
@@ -444,47 +461,32 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 }
 
 - (void)audioSettingsUpdated:(NSNotification *)notification {
-    if (![self hasVisibleChannelPane]) return;
+    if (_voiceControlsAtSide || ![self hasVisibleChannelPane]) return;
+    [self refreshVoiceControls];
+}
+
+- (void)refreshVoiceControls {
     [self removeVoiceDock];
     [self installVoiceDock];
     [self updateChannelSummary];
+}
+
+- (void)cancelPushToTalk {
+    if (_pttState) [self talkOff:_talkButton];
 }
 
 - (UIButton *)floatingMuteButtonWithSymbol:(NSString *)symbol action:(SEL)action {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     button.configuration = [self muteButtonConfigurationWithSymbol:symbol muted:NO];
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
-    UIFont *font = MUServerFont(UIFontTextStyleCaption2, NO, self.traitCollection);
-    CGFloat width = MAX(96, ceil(MAX([NSLocalizedString(@"Mic", nil) sizeWithAttributes:@{NSFontAttributeName:font}].width, [NSLocalizedString(@"Audio", nil) sizeWithAttributes:@{NSFontAttributeName:font}].width)) + 24);
-    NSLayoutConstraint *preferredWidth = [button.widthAnchor constraintEqualToConstant:width];
-    preferredWidth.priority = UILayoutPriorityDefaultHigh;
+    NSLayoutConstraint *preferredWidth = [button.widthAnchor constraintEqualToConstant:_voiceControlsAtSide ? 44 : 96];
+    preferredWidth.priority = _voiceControlsAtSide ? UILayoutPriorityRequired : UILayoutPriorityDefaultHigh;
     [NSLayoutConstraint activateConstraints:@[
         preferredWidth,
         [button.widthAnchor constraintGreaterThanOrEqualToConstant:44],
-        [button.heightAnchor constraintEqualToConstant:64]
+        [button.heightAnchor constraintEqualToConstant:_voiceControlsAtSide ? 44 : 64]
     ]];
     return button;
-}
-
-- (UILabel *)muteControlLabelWithTitle:(NSString *)title {
-    UILabel *label = [UILabel new];
-    label.text = title;
-    label.font = MUServerFont(UIFontTextStyleCaption2, YES, self.traitCollection);
-    label.adjustsFontForContentSizeCategory = YES;
-    label.textAlignment = NSTextAlignmentCenter;
-    label.numberOfLines = 0;
-    label.accessibilityElementsHidden = YES;
-    label.isAccessibilityElement = NO;
-    return label;
-}
-
-- (UIStackView *)muteControlWithButton:(UIButton *)button label:(UILabel *)label {
-    UIStackView *control = [[UIStackView alloc] initWithArrangedSubviews:@[button, label]];
-    control.axis = UILayoutConstraintAxisVertical;
-    control.alignment = UIStackViewAlignmentCenter;
-    control.spacing = 6;
-    [label.widthAnchor constraintEqualToAnchor:button.widthAnchor].active = YES;
-    return control;
 }
 
 - (UIButtonConfiguration *)muteButtonConfigurationWithSymbol:(NSString *)symbol muted:(BOOL)muted {
@@ -497,9 +499,10 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.baseBackgroundColor = muted ? [UIColor systemRedColor] : nil;
     configuration.baseForegroundColor = muted ? [UIColor whiteColor] : [UIColor labelColor];
-    configuration.image = [MUImage symbolNamed:symbol pointSize:28];
-    configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:28 weight:UIImageSymbolWeightMedium];
-    configuration.contentInsets = NSDirectionalEdgeInsetsMake(10, 12, 10, 12);
+    CGFloat symbolSize = _voiceControlsAtSide ? 20 : 22;
+    configuration.image = [MUImage symbolNamed:symbol pointSize:symbolSize];
+    configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:symbolSize weight:UIImageSymbolWeightMedium];
+    configuration.contentInsets = _voiceControlsAtSide ? NSDirectionalEdgeInsetsMake(10, 8, 10, 8) : NSDirectionalEdgeInsetsMake(10, 12, 10, 12);
     return configuration;
 }
 
@@ -512,10 +515,8 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     _speakerButton.enabled = user && !user.isDeafened;
     _microphoneButton.selected = microphoneMuted;
     _speakerButton.selected = speakerMuted;
-    _microphoneButton.configuration = [self muteButtonConfigurationWithSymbol:microphoneMuted ? @"mic.slash.fill" : @"mic.fill" muted:microphoneMuted];
-    _speakerButton.configuration = [self muteButtonConfigurationWithSymbol:speakerMuted ? @"speaker.slash.fill" : @"speaker.wave.2.fill" muted:speakerMuted];
-    _microphoneLabel.textColor = microphoneMuted ? UIColor.systemRedColor : UIColor.labelColor;
-    _speakerLabel.textColor = speakerMuted ? UIColor.systemRedColor : UIColor.labelColor;
+    if (_microphoneButton) _microphoneButton.configuration = [self muteButtonConfigurationWithSymbol:microphoneMuted ? @"mic.slash.fill" : @"mic.fill" muted:microphoneMuted];
+    if (_speakerButton) _speakerButton.configuration = [self muteButtonConfigurationWithSymbol:speakerMuted ? @"speaker.slash.fill" : @"speaker.wave.2.fill" muted:speakerMuted];
     _microphoneButton.accessibilityLabel = microphoneMuted ? NSLocalizedString(@"Unmute Microphone", nil) : NSLocalizedString(@"Mute Microphone", nil);
     _speakerButton.accessibilityLabel = speakerMuted ? NSLocalizedString(@"Unmute Speaker", nil) : NSLocalizedString(@"Mute Speaker", nil);
     _microphoneButton.accessibilityValue = microphoneMuted ? NSLocalizedString(@"Muted", nil) : NSLocalizedString(@"On", nil);
@@ -528,14 +529,14 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
     _voiceStatusLabel.textColor = speakerMuted || microphoneMuted ? UIColor.systemRedColor : state != MLTalkStatePassive ? UIColor.systemGreenColor : UIColor.labelColor;
 }
 
-- (void)toggleMicrophone:(UIButton *)button {
+- (void)toggleMicrophone:(id)sender {
     MLUser *user = _serverModel.connectedUser;
     if (!user || user.isMuted || user.isSuppressed) return;
     BOOL mute = !user.isSelfMuted;
     [_serverModel setSelfMuted:mute andSelfDeafened:mute && user.isSelfDeafened];
 }
 
-- (void)toggleSpeaker:(UIButton *)button {
+- (void)toggleSpeaker:(id)sender {
     MLUser *user = _serverModel.connectedUser;
     if (!user || user.isDeafened) return;
     if (user.isSelfDeafened) {
@@ -774,8 +775,8 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
 }
 
 - (void)serverModel:(MLServerModel *)model userTalkStateChanged:(MLUser *)user {
-    if (![self hasVisibleChannelPane]) return;
     if (user == model.connectedUser) [self updateMuteControls];
+    if (![self hasVisibleChannelPane]) return;
     NSInteger row = [self indexForUser:user];
     if (row == NSNotFound) return;
     [self updateUserAppearance:[self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]] user:user];

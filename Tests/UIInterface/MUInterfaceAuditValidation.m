@@ -319,7 +319,7 @@ static void TransmissionChecks(UIWindow *window) {
   for(NSString *category in @[UIContentSizeCategoryLarge,UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]) {
    server.traitOverrides.preferredContentSizeCategory=category;Wait(.2);[window layoutIfNeeded];
    UIButton *talk=[server valueForKey:@"_talkButton"],*speaker=[server valueForKey:@"_speakerButton"];UIView *dock=[server valueForKey:@"_voiceDock"];
-   Check(talk && speaker && [server valueForKey:@"_microphoneButton"]==nil && [server valueForKey:@"_speakerLabel"]==nil,@"Push-to-talk retains the old microphone/audio group");
+   Check(talk && speaker && [server valueForKey:@"_microphoneButton"]==nil,@"Push-to-talk retains the old microphone/audio group");
    CGRect t=[talk convertRect:talk.bounds toView:window],s=[speaker convertRect:speaker.bounds toView:window];
    Check(t.size.width>window.bounds.size.width*.55 && s.size.width==64 && fabs(CGRectGetMidY(t)-CGRectGetMidY(s))<1,@"Push-to-talk is not a wide bar beside a centered speaker button");
    Check(CGRectGetMaxX(t)+11<=CGRectGetMinX(s) && CGRectGetMinX(t)>=25 && CGRectGetMaxX(s)<=window.bounds.size.width-25,@"Push-to-talk controls overlap or lose edge padding");
@@ -334,7 +334,13 @@ static void TransmissionChecks(UIWindow *window) {
   user.selfDeafened=YES;user.selfMuted=YES;[server updateMuteControls];Check(!talk.enabled,@"Deafened user can still press to transmit");
   [speaker sendActionsForControlEvents:UIControlEventTouchUpInside];Check(!model.requestedDeafen && !model.requestedMute,@"Independent speaker cannot clear Self-Deafen");
   user.selfDeafened=NO;user.selfMuted=NO;[server updateMuteControls];[talk sendActionsForControlEvents:UIControlEventTouchDown];
+  [talk sendActionsForControlEvents:UIControlEventTouchCancel];
+  [talk sendActionsForControlEvents:UIControlEventTouchDown];
   SelectModeAction(root,@"vad");Check(!MLAudio.sharedAudio.forceTransmit && [server valueForKey:@"_talkButton"]==nil && [server valueForKey:@"_microphoneButton"]!=nil,@"Quick mode change leaves the hold active or keeps the wrong dock");
+  for (UIView *view in Subviews([server valueForKey:@"_voiceDock"])) if ([view isKindOfClass:UILabel.class]) {
+   NSString *text=((UILabel *)view).text;
+   Check(![text isEqual:@"Mic"] && ![text isEqual:NSLocalizedString(@"Audio",nil)],@"Voice icons retain redundant captions");
+  }
   SelectModeAction(root,@"continuous");Check(MLAudio.sharedAudio.transmitType==MLTransmitTypeContinuous,@"Continuous mode did not apply");
   SelectModeAction(root,@"ptt");Check([server valueForKey:@"_talkButton"]!=nil && !MLAudio.sharedAudio.forceTransmit,@"Returning to push-to-talk starts unintended transmission");
   [results addObject:@"PASS quick transmission menu, adaptive wide PTT bar, cancellation, Self-Deafen and repeated mode switches"];
