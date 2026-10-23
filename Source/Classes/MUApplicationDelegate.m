@@ -7,6 +7,7 @@
 #import "MUWelcomeScreenPhone.h"
 #import "MUWelcomeScreenPad.h"
 #import "MUAppMenuViewController.h"
+#import "MUOnboardingViewController.h"
 #import "MUDatabase.h"
 #import "MUPublicServerList.h"
 #import "MUConnectionController.h"
@@ -102,7 +103,25 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
     _tabBarController = [UITabBarController new];
     _tabBarController.delegate = self;
     _tabBarController.viewControllers = @[_navigationController, _settingsNavigationController];
-    _window.rootViewController = _tabBarController;
+    NSString *databasePath = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES).firstObject stringByAppendingPathComponent:@"mumble.sqlite"];
+    BOOL needsSetup = [MUOnboardingViewController shouldPresentForDefaults:NSUserDefaults.standardUserDefaults hasExistingInstallation:[NSFileManager.defaultManager fileExistsAtPath:databasePath]];
+    if (needsSetup) {
+        __weak MUApplicationDelegate *weakSelf = self;
+        MUOnboardingViewController *setup = [[MUOnboardingViewController alloc] initWithCompletion:^{
+            MUApplicationDelegate *delegate = weakSelf;
+            if (!delegate) return;
+            delegate->_window.rootViewController = delegate->_tabBarController;
+            delegate->_onboardingNavigationController = nil;
+            [delegate reloadPreferences];
+            NSURL *pendingURL = delegate->_pendingMumbleURL;
+            delegate->_pendingMumbleURL = nil;
+            if (pendingURL) [delegate openMumbleURL:pendingURL];
+        }];
+        _onboardingNavigationController = [[UINavigationController alloc] initWithRootViewController:setup];
+        _window.rootViewController = _onboardingNavigationController;
+    } else {
+        _window.rootViewController = _tabBarController;
+    }
     [_window makeKeyAndVisible];
 
     // Database, badge and the public-server refresh are not needed to draw
