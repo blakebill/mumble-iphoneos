@@ -1,14 +1,14 @@
+#import "MLClient.h"
 // Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 #import "MUUserStateAcessoryView.h"
 
-#import <MumbleKit/MKUser.h>
 
 @implementation MUUserStateAcessoryView
 
-+ (UIView *) viewForUser:(MKUser *)user {
++ (UIView *) viewForUser:(MLUser *)user {
     const CGFloat iconHeight = 24.0f;
     const CGFloat iconWidth = 28.0f;
     

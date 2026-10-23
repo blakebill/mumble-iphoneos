@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -10,7 +11,6 @@
 #import "MUCertificateDiskImportViewController.h"
 #import "MUBackgroundView.h"
 
-#import <MumbleKit/MKCertificate.h>
 
 @interface MUCertificatePreferencesViewController () {
     NSMutableArray   *_certificateItems;
@@ -79,7 +79,7 @@
     
     // Configure the cell...
     NSDictionary *dict = [_certificateItems objectAtIndex:[indexPath row]];
-    MKCertificate *cert = [dict objectForKey:@"cert"];
+    MLCertificate *cert = [dict objectForKey:@"cert"];
     [cell setSubjectName:[cert subjectName]];
     [cell setEmail:[cert emailAddress]];
     [cell setIssuerText:[cert issuerName]];
@@ -223,7 +223,7 @@
     if (persistentRefs) {
         _certificateItems = [[NSMutableArray alloc] initWithCapacity:[persistentRefs count]];
         for (NSData *persistentRef in persistentRefs) {
-            MKCertificate *cert = [MUCertificateController certificateWithPersistentRef:persistentRef];
+            MLCertificate *cert = [MUCertificateController certificateWithPersistentRef:persistentRef];
             if (cert) {
                 [_certificateItems addObject:[NSDictionary dictionaryWithObjectsAndKeys:
                                               cert,                          @"cert",
@@ -238,7 +238,7 @@
         // Extract hashes of identity certs
         NSMutableArray *identityCertHashes = [[NSMutableArray alloc] init];
         for (NSDictionary *item in _certificateItems) {
-            MKCertificate *cert = [item objectForKey:@"cert"];
+            MLCertificate *cert = [item objectForKey:@"cert"];
             [identityCertHashes addObject:[cert digest]];
         }
 
@@ -264,7 +264,7 @@
                 NSData *certData = (NSData *) CFBridgingRelease(rawCertData);
                 CFRelease(secCert);
                 
-                MKCertificate *consideredCert = [MKCertificate certificateWithCertificate:certData privateKey:nil];
+                MLCertificate *consideredCert = [MLCertificate certificateWithCertificate:certData privateKey:nil];
                 NSData *consideredDigest = [consideredCert digest];
     
                 BOOL alreadyPresent = NO;

@@ -7,7 +7,7 @@
 #import "MUBackgroundView.h"
 
 @interface MUAccessTokenViewController () {
-    MKServerModel    *_model;
+    MLServerModel    *_model;
     NSMutableArray   *_tokens;
 
     NSString         *_tokenValue;
@@ -20,7 +20,7 @@
 
 @implementation MUAccessTokenViewController
 
-- (id) initWithServerModel:(MKServerModel *)model {
+- (id) initWithServerModel:(MLServerModel *)model {
     if ((self = [super initWithStyle:UITableViewStylePlain])) {
         _model = model;
         _editingRow = -1;

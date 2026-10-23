@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-@class MKTextMessage;
+@class MLTextMessage;
 @class MUTextMessage;
 
 @interface MUMessagesDatabase : NSObject
-- (void) addMessage:(MKTextMessage *)msg withHeading:(NSString *)heading andSentBySelf:(BOOL)selfSent;
+- (void) addMessage:(MLTextMessage *)msg withHeading:(NSString *)heading andSentBySelf:(BOOL)selfSent;
 - (MUTextMessage *) messageAtIndex:(NSInteger)row;
 - (void) clearMessageAtIndex:(NSInteger)row;
 - (NSInteger) count;

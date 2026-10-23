@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -10,16 +11,13 @@
 #import "MUDatabase.h"
 #import "MUHorizontalFlipTransitionDelegate.h"
 
-#import <MumbleKit/MKConnection.h>
-#import <MumbleKit/MKServerModel.h>
-#import <MumbleKit/MKCertificate.h>
 
 NSString *MUConnectionOpenedNotification = @"MUConnectionOpenedNotification";
 NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
 
-@interface MUConnectionController () <MKConnectionDelegate, MKServerModelDelegate, MUServerCertificateTrustViewControllerProtocol> {
-    MKConnection               *_connection;
-    MKServerModel              *_serverModel;
+@interface MUConnectionController () <MLConnectionDelegate, MLServerModelDelegate, MUServerCertificateTrustViewControllerProtocol> {
+    MLConnection               *_connection;
+    MLServerModel              *_serverModel;
     MUServerRootViewController *_serverRoot;
     UIViewController           *_parentViewController;
     UIAlertController          *_alertCtrl;
@@ -27,7 +25,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     int                        _numDots;
 
     UIAlertController          *_rejectAlertCtrl;
-    MKRejectReason             _rejectReason;
+    MLRejectReason             _rejectReason;
 
     NSString                   *_hostname;
     NSUInteger                 _port;
@@ -116,11 +114,11 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
 }
 
 - (void) establishConnection {
-    _connection = [[MKConnection alloc] init];
+    _connection = [[MLConnection alloc] init];
     [_connection setDelegate:self];
     [_connection setForceTCP:[[NSUserDefaults standardUserDefaults] boolForKey:@"NetworkForceTCP"]];
     
-    _serverModel = [[MKServerModel alloc] initWithConnection:_connection];
+    _serverModel = [[MLServerModel alloc] initWithConnection:_connection];
     [_serverModel addDelegate:self];
     
     _serverRoot = [[MUServerRootViewController alloc] initWithConnection:_connection andServerModel:_serverModel];
@@ -169,14 +167,14 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     [_alertCtrl setTitle:[NSString stringWithFormat:@"%@%@", NSLocalizedString(@"Connecting", nil), dots]];
 }
 
-#pragma mark - MKConnectionDelegate
+#pragma mark - MLConnectionDelegate
 
-- (void) connectionOpened:(MKConnection *)conn {
+- (void) connectionOpened:(MLConnection *)conn {
     NSArray *tokens = [MUDatabase accessTokensForServerWithHostname:[conn hostname] port:[conn port]];
     [conn authenticateWithUsername:_username password:_password accessTokens:tokens];
 }
 
-- (void) connection:(MKConnection *)conn closedWithError:(NSError *)err {
+- (void) connection:(MLConnection *)conn closedWithError:(NSError *)err {
     [self hideConnectingView];
     if (err) {
         UIAlertController *alertCtrl = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"Connection closed", nil)
@@ -193,7 +191,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     }
 }
 
-- (void) connection:(MKConnection*)conn unableToConnectWithError:(NSError *)err {
+- (void) connection:(MLConnection*)conn unableToConnectWithError:(NSError *)err {
     [self hideConnectingView];
 
     NSString *msg = [err localizedDescription];
@@ -227,10 +225,10 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
 }
 
 // The connection encountered an invalid SSL certificate chain.
-- (void) connection:(MKConnection *)conn trustFailureInCertificateChain:(NSArray *)chain {
+- (void) connection:(MLConnection *)conn trustFailureInCertificateChain:(NSArray *)chain {
     // Check the database whether the user trusts the leaf certificate of this server.
     NSString *storedDigest = [MUDatabase digestForServerWithHostname:[conn hostname] port:[conn port]];
-    MKCertificate *cert = [[conn peerCertificates] firstObject];
+    MLCertificate *cert = [[conn peerCertificates] firstObject];
     NSString *serverDigest = [cert hexDigest];
     
     void (^cancelHandler)(UIAlertAction * _Nonnull action) = ^(UIAlertAction * _Nonnull action) {
@@ -249,7 +247,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
         // Store the cert hash of the leaf certificate.  We then ignore certificate
         // verification errors from this host as long as it keeps on presenting us
         // the same certificate it always has.
-        MKCertificate *cert = [[self->_connection peerCertificates] objectAtIndex:0];
+        MLCertificate *cert = [[self->_connection peerCertificates] objectAtIndex:0];
         NSString *digest = [cert hexDigest];
         [MUDatabase storeDigest:digest forServerWithHostname:[self->_connection hostname] port:[self->_connection port]];
         [self->_connection setIgnoreSSLVerification:YES];
@@ -325,16 +323,16 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
 }
 
 // The server rejected our connection.
-- (void) connection:(MKConnection *)conn rejectedWithReason:(MKRejectReason)reason explanation:(NSString *)explanation {
+- (void) connection:(MLConnection *)conn rejectedWithReason:(MLRejectReason)reason explanation:(NSString *)explanation {
     NSString *title = NSLocalizedString(@"Connection Rejected", nil);
     NSString *msg = nil;
     UIAlertController *alertCtrl = nil;
     
     void (^cancelHandler)(UIAlertAction * _Nonnull action) = ^(UIAlertAction * _Nonnull action) {
-        if (self->_rejectReason == MKRejectReasonInvalidUsername || self->_rejectReason == MKRejectReasonUsernameInUse) {
+        if (self->_rejectReason == MLRejectReasonInvalidUsername || self->_rejectReason == MLRejectReasonUsernameInUse) {
             UITextField *textField = [[self->_rejectAlertCtrl textFields] firstObject];
             self->_username = [[textField text] copy];
-        } else if (self->_rejectReason == MKRejectReasonWrongServerPassword || self->_rejectReason == MKRejectReasonWrongUserPassword) {
+        } else if (self->_rejectReason == MLRejectReasonWrongServerPassword || self->_rejectReason == MLRejectReasonWrongUserPassword) {
             UITextField *textField = [[self->_rejectAlertCtrl textFields] firstObject];
             self->_password = [[textField text] copy];
         }
@@ -342,10 +340,10 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
         // Rejection handler has already handled the teardown for us.
     };
     void (^reconnectHandler)(UIAlertAction * _Nonnull action) = ^(UIAlertAction * _Nonnull action) {
-        if (self->_rejectReason == MKRejectReasonInvalidUsername || self->_rejectReason == MKRejectReasonUsernameInUse) {
+        if (self->_rejectReason == MLRejectReasonInvalidUsername || self->_rejectReason == MLRejectReasonUsernameInUse) {
             UITextField *textField = [[self->_rejectAlertCtrl textFields] firstObject];
             self->_username = [[textField text] copy];
-        } else if (self->_rejectReason == MKRejectReasonWrongServerPassword || self->_rejectReason == MKRejectReasonWrongUserPassword) {
+        } else if (self->_rejectReason == MLRejectReasonWrongServerPassword || self->_rejectReason == MLRejectReasonWrongUserPassword) {
             UITextField *textField = [[self->_rejectAlertCtrl textFields] firstObject];
             self->_password = [[textField text] copy];
         }
@@ -365,7 +363,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     [self teardownConnection];
     
     switch (reason) {
-        case MKRejectReasonNone:
+        case MLRejectReasonNone:
             msg = NSLocalizedString(@"No reason", nil);
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -376,7 +374,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
                                                            style:UIAlertActionStyleCancel
                                                          handler:cancelHandler]];
             break;
-        case MKRejectReasonWrongVersion:
+        case MLRejectReasonWrongVersion:
             msg = @"Client/server version mismatch";
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -387,7 +385,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
                                                            style:UIAlertActionStyleCancel
                                                          handler:cancelHandler]];
             break;
-        case MKRejectReasonInvalidUsername:
+        case MLRejectReasonInvalidUsername:
             msg = NSLocalizedString(@"Invalid username", nil);
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -403,7 +401,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
                                                            style:UIAlertActionStyleDefault
                                                          handler:reconnectHandler]];
             break;
-        case MKRejectReasonWrongUserPassword:
+        case MLRejectReasonWrongUserPassword:
             msg = NSLocalizedString(@"Wrong certificate or password for existing user", nil);
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -419,7 +417,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
                                                            style:UIAlertActionStyleDefault
                                                          handler:reconnectHandler]];
             break;
-        case MKRejectReasonWrongServerPassword:
+        case MLRejectReasonWrongServerPassword:
             msg = NSLocalizedString(@"Wrong server password", nil);
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -435,7 +433,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
                                                            style:UIAlertActionStyleDefault
                                                          handler:reconnectHandler]];
             break;
-        case MKRejectReasonUsernameInUse:
+        case MLRejectReasonUsernameInUse:
             msg = NSLocalizedString(@"Username already in use", nil);
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -451,7 +449,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
                                                            style:UIAlertActionStyleDefault
                                                          handler:reconnectHandler]];
             break;
-        case MKRejectReasonServerIsFull:
+        case MLRejectReasonServerIsFull:
             msg = NSLocalizedString(@"Server is full", nil);
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -462,7 +460,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
                                                            style:UIAlertActionStyleCancel
                                                          handler:cancelHandler]];
             break;
-        case MKRejectReasonNoCertificate:
+        case MLRejectReasonNoCertificate:
             msg = NSLocalizedString(@"A certificate is needed to connect to this server", nil);
             
             alertCtrl = [UIAlertController alertControllerWithTitle:title
@@ -481,9 +479,9 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     [_parentViewController presentViewController:alertCtrl animated:YES completion:nil];
 }
 
-#pragma mark - MKServerModelDelegate
+#pragma mark - MLServerModelDelegate
 
-- (void) serverModel:(MKServerModel *)model joinedServerAsUser:(MKUser *)user {
+- (void) serverModel:(MLServerModel *)model joinedServerAsUser:(MLUser *)user {
     [MUDatabase storeUsername:[user userName] forServerWithHostname:[model hostname] port:[model port]];
 
     [self hideConnectingViewWithCompletion:^{

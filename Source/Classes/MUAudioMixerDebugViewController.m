@@ -1,9 +1,9 @@
+#import "MLClient.h"
 // Copyright 2013 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 #import "MUAudioMixerDebugViewController.h"
-#import <MumbleKit/MKAudio.h>
 
 @interface MUAudioMixerDebugViewController () {
     NSDictionary  *_mixerInfo;
@@ -35,7 +35,7 @@
 }
 
 - (void) updateMixerInfo:(id)sender {
-    _mixerInfo = [[MKAudio sharedAudio] copyAudioOutputMixerDebugInfo];
+    _mixerInfo = [[MLAudio sharedAudio] copyAudioOutputMixerDebugInfo];
     [[self tableView] reloadData];
 }
 

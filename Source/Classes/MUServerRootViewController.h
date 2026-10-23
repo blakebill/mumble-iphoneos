@@ -1,11 +1,10 @@
+#import "MLClient.h"
 // Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#import <MumbleKit/MKConnection.h>
-#import <MumbleKit/MKServerModel.h>
 
 @interface MUServerRootViewController : UINavigationController
-- (id) initWithConnection:(MKConnection *)conn andServerModel:(MKServerModel *)model;
+- (id) initWithConnection:(MLConnection *)conn andServerModel:(MLServerModel *)model;
 - (void) takeOwnershipOfConnectionDelegate;
 @end

@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 #import "MUCertificateChainBuilder.h"
-#include <MumbleKit/MKCertificate.h>
+#import "MLClient.h"
 
 static NSArray *FindValidParentsForCert(SecCertificateRef cert);
 static NSDictionary *GetAttrsForCert(SecCertificateRef cert);
@@ -41,11 +41,11 @@ static NSArray *FindValidParentsForCert(SecCertificateRef cert) {
         SecCertificateRef parentCertRef = (SecCertificateRef) [parentAttr objectForKey:(id)kSecValueRef];
 
         NSData *parentData = (NSData *) SecCertificateCopyData(parentCertRef);
-        MKCertificate *parent = [MKCertificate certificateWithCertificate:parentData privateKey:nil];
+        MLCertificate *parent = [MLCertificate certificateWithCertificate:parentData privateKey:nil];
         [parentData release];
         
         NSData *childData = (NSData *) SecCertificateCopyData(cert);
-        MKCertificate *child = [MKCertificate certificateWithCertificate:childData privateKey:nil];
+        MLCertificate *child = [MLCertificate certificateWithCertificate:childData privateKey:nil];
         [childData release];
     
         if ([parent isValidOnDate:[NSDate date]] && [child isSignedBy:parent]) {
@@ -86,7 +86,7 @@ static BOOL CertIsSelfSignedAndValid(SecCertificateRef cert) {
     NSData *issuer = [attrs objectForKey:(id)kSecAttrIssuer]; 
     if ([subject isEqualToData:issuer]) {
         NSData *data = (NSData *) SecCertificateCopyData(cert);
-        MKCertificate *selfSigned = [MKCertificate certificateWithCertificate:data privateKey:nil];
+        MLCertificate *selfSigned = [MLCertificate certificateWithCertificate:data privateKey:nil];
         [data release];
         if ([selfSigned isValidOnDate:[NSDate date]] && [selfSigned isSignedBy:selfSigned]) {
             return YES;

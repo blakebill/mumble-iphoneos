@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -12,7 +13,6 @@
 #import "MUImage.h"
 #import "MUBackgroundView.h"
 
-#import <MumbleKit/MKCertificate.h>
 
 static const NSUInteger CertificateViewSectionSubject            = 0;
 static const NSUInteger CertificateViewSectionIssuer             = 1;
@@ -48,7 +48,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
         for (int i = 1; i < [chains count]; i++) {
             SecCertificateRef secCert = (SecCertificateRef) [chains objectAtIndex:i];
             NSData *certData = (NSData *) SecCertificateCopyData(secCert);
-            [certificates addObject:[MKCertificate certificateWithCertificate:certData privateKey:nil]];
+            [certificates addObject:[MLCertificate certificateWithCertificate:certData privateKey:nil]];
             [certData release];
         }
         _certificates = certificates;
@@ -60,7 +60,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
     return self;
 }
 
-- (id) initWithCertificate:(MKCertificate *)cert {
+- (id) initWithCertificate:(MLCertificate *)cert {
     if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
         _certificates = [[NSArray alloc] initWithObjects:cert, nil];
         _curIdx = 0;
@@ -139,7 +139,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
     [self updateCertificateDisplay];
 }
 
-- (void) showDataForCertificate:(MKCertificate *)cert {
+- (void) showDataForCertificate:(MLCertificate *)cert {
     NSMutableArray *subject = [[NSMutableArray alloc] init];
     NSMutableArray *issuer = [[NSMutableArray alloc] init];
     NSString *str = nil;
@@ -148,7 +148,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
     NSString *org = NSLocalizedString(@"Organization", @"Organization (O) of an X.509 certificate");
     
     // Subject DN + additional
-    str = [cert subjectItem:MKCertificateItemCommonName];
+    str = [cert subjectItem:MLCertificateItemCommonName];
     if (str) {
         [subject addObject:[NSArray arrayWithObjects:cn, str, nil]];
         _certTitle = [str copy];
@@ -157,7 +157,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
                                        @"Title shown when viewing a certificate without a Subject Common Name (CN)");
     }
 
-    str = [cert subjectItem:MKCertificateItemOrganization];
+    str = [cert subjectItem:MLCertificateItemOrganization];
     if (str) {
         [subject addObject:[NSArray arrayWithObjects:org, str, nil]];
     }
@@ -195,11 +195,11 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
     }
 
     // Issuer DN
-    str = [cert issuerItem:MKCertificateItemCommonName];
+    str = [cert issuerItem:MLCertificateItemCommonName];
     if (str)
         [issuer addObject:[NSArray arrayWithObjects:cn, str, nil]];
 
-    str = [cert issuerItem:MKCertificateItemOrganization];
+    str = [cert issuerItem:MLCertificateItemOrganization];
     if (str)
         [issuer addObject:[NSArray arrayWithObjects:org, str, nil]];
 
@@ -277,7 +277,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
     NSUInteger section = [indexPath section];
     NSUInteger row = [indexPath row];
     if (section == CertificateViewSectionSHA1Fingerprint) {
-        MKCertificate *cert = [_certificates objectAtIndex:_curIdx];
+        MLCertificate *cert = [_certificates objectAtIndex:_curIdx];
         NSString *hexDigest = [cert hexDigestOfKind:@"sha1"];
         if ([indexPath row] == 0 && hexDigest.length == 40) {
             cell.textLabel.text = hexDigest;
@@ -288,7 +288,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
             cell.selectionStyle = UITableViewCellSelectionStyleGray;
         }
     } else if (section == CertificateViewSectionSHA256Fingerprint) {
-        MKCertificate *cert = [_certificates objectAtIndex:_curIdx];
+        MLCertificate *cert = [_certificates objectAtIndex:_curIdx];
         NSString *hexDigest = [cert hexDigestOfKind:@"sha256"];
         if ([indexPath row] == 0 && hexDigest.length == 64) {
             cell.textLabel.text = hexDigest;
@@ -321,7 +321,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
 
 - (void) tableView:(UITableView *)tableView performAction:(SEL)action forRowAtIndexPath:(NSIndexPath *)indexPath withSender:(id)sender {
     if (action == @selector(copy:)) {
-        MKCertificate *cert = [_certificates objectAtIndex:_curIdx];
+        MLCertificate *cert = [_certificates objectAtIndex:_curIdx];
         NSString *str = nil;
         switch (indexPath.section) {
             case CertificateViewSectionSubject:
@@ -453,7 +453,7 @@ static const NSUInteger CertificateViewSectionTotal              = 4;
             NSString *cancelButtonText = NSLocalizedString(@"OK", @"Default Cancel button text for UIAlertViews that are shown when certificate export fails.");
             
             NSString *password = [[[alertCtrl textFields] objectAtIndex:1] text];
-            NSData *data = [MKCertificate exportCertificateChainAsPKCS12:_certificates withPassword:password];
+            NSData *data = [MLCertificate exportCertificateChainAsPKCS12:_certificates withPassword:password];
             if (data == nil) {
                 NSString *unknownExportErrorMsg = NSLocalizedString(@"Mumble was unable to export the certificate.",
                                                                     @"Error message shown for a failed export, cause unknown.");

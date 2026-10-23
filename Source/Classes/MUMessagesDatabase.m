@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2012 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -6,7 +7,6 @@
 #import "MUTextMessage.h"
 #import "MUDataURL.h"
 
-#import <MumbleKit/MKTextMessage.h>
 
 #import <FMDB/FMDatabase.h>
 
@@ -41,7 +41,7 @@
     return self;
 }
 
-- (void) addMessage:(MKTextMessage *)msg withHeading:(NSString *)heading andSentBySelf:(BOOL)selfSent {
+- (void) addMessage:(MLTextMessage *)msg withHeading:(NSString *)heading andSentBySelf:(BOOL)selfSent {
     NSError *err = nil;
     NSString *plainMsg = [msg plainTextString];
     plainMsg = [plainMsg stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];

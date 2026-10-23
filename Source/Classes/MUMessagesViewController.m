@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -5,8 +6,6 @@
 @import CoreServices;
 @import UserNotifications;
 
-#import <MumbleKit/MKServerModel.h>
-#import <MumbleKit/MKTextMessage.h>
 
 #import "MUMessagesViewController.h"
 #import "MUTextMessage.h"
@@ -137,24 +136,24 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
 
 @end
 
-@interface MUMessagesViewController () <UITableViewDelegate, UITableViewDataSource, MKServerModelDelegate, UITextFieldDelegate, MUMessageBubbleTableViewCellDelegate, MUMessageRecipientViewControllerDelegate> {
-    MKServerModel            *_model;
+@interface MUMessagesViewController () <UITableViewDelegate, UITableViewDataSource, MLServerModelDelegate, UITextFieldDelegate, MUMessageBubbleTableViewCellDelegate, MUMessageRecipientViewControllerDelegate> {
+    MLServerModel            *_model;
     UITableView              *_tableView;
     UIView                   *_textBarView;
     MUConsistentTextField    *_textField;
     BOOL                     _autoCorrectGuard;
     MUMessagesDatabase       *_msgdb;
 
-    MKChannel                *_channel;
-    MKChannel                *_tree;
-    MKUser                   *_user;
+    MLChannel                *_channel;
+    MLChannel                *_tree;
+    MLUser                   *_user;
 }
 - (void) setReceiverName:(NSString *)receiver andImage:(NSString *)imageName;
 @end
 
 @implementation MUMessagesViewController
 
-- (id) initWithServerModel:(MKServerModel *)model {
+- (id) initWithServerModel:(MLServerModel *)model {
     if ((self = [super init])) {
         _model = model;
         [_model addDelegate:self];
@@ -444,7 +443,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     if ([originalStr length] > 0) {
         NSString *htmlText = [MUTextMessageProcessor processedHTMLFromPlainTextMessage:originalStr];
         if (htmlText != nil) {
-            MKTextMessage *txtMsg = [MKTextMessage messageWithHTML:htmlText];
+            MLTextMessage *txtMsg = [MLTextMessage messageWithHTML:htmlText];
             NSString *destName = nil;
             if (txtMsg != nil) {
                 if (_tree == nil && _channel == nil && _user == nil) {
@@ -519,7 +518,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
 
 #pragma mark - MUMessageRecipientTableViewControllerDelegate
 
-- (void) messageRecipientViewController:(MUMessageRecipientViewController *)viewCtrlr didSelectChannel:(MKChannel *)channel {
+- (void) messageRecipientViewController:(MUMessageRecipientViewController *)viewCtrlr didSelectChannel:(MLChannel *)channel {
     _tree = nil;
     _channel = channel;
     _user = nil;
@@ -527,7 +526,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     [self setReceiverName:[channel channelName] andImage:@"channelmsg"];
 }
 
-- (void) messageRecipientViewController:(MUMessageRecipientViewController *)viewCtrlr didSelectUser:(MKUser *)user {
+- (void) messageRecipientViewController:(MUMessageRecipientViewController *)viewCtrlr didSelectUser:(MLUser *)user {
     _tree = nil;
     _channel = nil;
     _user = user;
@@ -543,9 +542,9 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     [self setReceiverName:[[[_model connectedUser] channel] channelName] andImage:@"channelmsg"];
 }
 
-#pragma mark - MKServerModel delegate
+#pragma mark - MLServerModel delegate
 
-- (void) serverModel:(MKServerModel *)model joinedServerAsUser:(MKUser *)user withWelcomeMessage:(MKTextMessage *)msg {
+- (void) serverModel:(MLServerModel *)model joinedServerAsUser:(MLUser *)user withWelcomeMessage:(MLTextMessage *)msg {
    [_msgdb addMessage:msg withHeading:NSLocalizedString(@"Welcome Message", @"Title for welcome message") andSentBySelf:NO];
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:[_msgdb count]-1 inSection:0];
     [_tableView insertRowsAtIndexPaths:[NSArray arrayWithObject:indexPath] withRowAnimation:UITableViewRowAnimationFade];
@@ -554,7 +553,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     }
 }
 
-- (void) serverModel:(MKServerModel *)model userMoved:(MKUser *)user toChannel:(MKChannel *)chan fromChannel:(MKChannel *)prevChan byUser:(MKUser *)mover {
+- (void) serverModel:(MLServerModel *)model userMoved:(MLUser *)user toChannel:(MLChannel *)chan fromChannel:(MLChannel *)prevChan byUser:(MLUser *)mover {
     if (user == [_model connectedUser]) {
         // Are we in 'send to default channel mode'?
         if (_user == nil && _channel == nil && _tree == nil) {
@@ -563,7 +562,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     }
 }
 
-- (void) serverModel:(MKServerModel *)model userLeft:(MKUser *)user {
+- (void) serverModel:(MLServerModel *)model userLeft:(MLUser *)user {
     if (user == _user) {
         _user = nil;
     }
@@ -571,7 +570,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     [self setReceiverName:[[[_model connectedUser] channel] channelName] andImage:@"channelmsg"];
 }
 
-- (void) serverModel:(MKServerModel *)model channelRenamed:(MKChannel *)channel {
+- (void) serverModel:(MLServerModel *)model channelRenamed:(MLChannel *)channel {
     if (channel == _tree) {
         [self setReceiverName:[channel channelName] andImage:@"channelmsg"];
     } else if (channel == _channel) {
@@ -581,7 +580,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     }
 }
 
-- (void) serverModel:(MKServerModel *)model channelRemoved:(MKChannel *)channel {
+- (void) serverModel:(MLServerModel *)model channelRemoved:(MLChannel *)channel {
     if (channel == _tree) {
         _tree = nil;
         [self setReceiverName:[[[_model connectedUser] channel] channelName] andImage:@"channelmsg"];
@@ -591,7 +590,7 @@ static UIView *MUMessagesViewControllerFindUIView(UIView *rootView, NSString *pr
     }
 }
 
-- (void) serverModel:(MKServerModel *)model textMessageReceived:(MKTextMessage *)msg fromUser:(MKUser *)user {
+- (void) serverModel:(MLServerModel *)model textMessageReceived:(MLTextMessage *)msg fromUser:(MLUser *)user {
     NSString *heading = NSLocalizedString(@"Server Message", @"A message sent from the server itself");
     if (user != nil) {
         heading = [NSString stringWithFormat:NSLocalizedString(@"From %@", @"Message sender title"), [user userName]];
