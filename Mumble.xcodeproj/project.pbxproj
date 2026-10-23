@@ -933,6 +933,7 @@
 				28BE997F18CFA83800910551,
 				69E1F121FF30BD1D7DD51485,
 				280256361510D70D00178B08,
+				A1C0F0000000000000000002,
 			);
 			sourceTree = "<group>";
 		};
@@ -1236,6 +1237,7 @@
 				2843040B16BF25590025A783,
 				A18E5C040000000100A18E01,
 				6C9E5E1C48EA8D4BDF94303A,
+				A1C0F0000000000000000001,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2067,6 +2069,18 @@
 			name = ru;
 			lastKnownFileType = text.plist.strings;
 			sourceTree = SOURCE_ROOT;
+		};
+
+		A1C0F0000000000000000002 = {
+			path = Resources/AppIcon.icon;
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			sourceTree = SOURCE_ROOT;
+		};
+
+		A1C0F0000000000000000001 = {
+			isa = PBXBuildFile;
+			fileRef = A1C0F0000000000000000002;
 		};
 
 	};
