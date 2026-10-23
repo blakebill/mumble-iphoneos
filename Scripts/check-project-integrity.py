@@ -93,7 +93,7 @@ for phase in app['buildPhases']:
 source_files = {p.resolve() for p in (ROOT / 'Source').rglob('*') if p.suffix in ('.m', '.mm')}
 assert compiled == source_files, f'Uncompiled or obsolete source: {sorted(compiled ^ source_files)}'
 for path in (ROOT / 'Resources').rglob('*'):
-    if path.is_file() and path.name not in ('README', 'Mumble-Translations-LICENSE.txt'):
+    if path.is_file() and path.name not in ('README', 'Mumble-Translations-LICENSE.txt', '.DS_Store'):
         # The layered icon is compiled as one document, including its SVG/JSON.
         assert path.resolve() in packaged or any(parent in packaged for parent in path.resolve().parents), f'Unpackaged resource: {path}'
 print(f'PASS project: {len(objects)} valid objects, {len(compiled)} app sources, {len(packaged)} packaged resources')

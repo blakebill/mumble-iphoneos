@@ -9,31 +9,11 @@
 #import "MUCertificateCell.h"
 #import "MUImage.h"
 
-static UIViewController *MUFrontmostViewController(void) {
-    UIWindow *window = nil;
-    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        if (![scene isKindOfClass:[UIWindowScene class]]) {
-            continue;
-        }
-        for (UIWindow *candidate in ((UIWindowScene *)scene).windows) {
-            if (candidate.isKeyWindow) {
-                window = candidate;
-                break;
-            }
-        }
-    }
-    UIViewController *controller = window.rootViewController;
-    while (controller.presentedViewController != nil) {
-        controller = controller.presentedViewController;
-    }
-    return controller;
-}
-
-static void ShowAlertDialog(NSString *title, NSString *msg) {
+static void ShowAlertDialog(UIViewController *presenter, NSString *title, NSString *msg) {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:msg preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
-        [MUFrontmostViewController() presentViewController:alert animated:YES completion:nil];
+        [presenter presentViewController:alert animated:YES completion:nil];
     });
 }
 
@@ -142,7 +122,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     NSError *error = nil;
     BOOL copied = [NSFileManager.defaultManager copyItemAtURL:source toURL:destination error:&error];
     if (scoped) [source stopAccessingSecurityScopedResource];
-    if (!copied) { ShowAlertDialog(NSLocalizedString(@"Import Failed", nil), error.localizedDescription); return; }
+    if (!copied) { ShowAlertDialog(self, NSLocalizedString(@"Import Failed", nil), error.localizedDescription); return; }
     [_diskCertificates addObject:name];
     [self updateDocumentActions];
     [self.tableView reloadData];
@@ -206,7 +186,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     NSString *transferPassword = [[NSUUID UUID] UUIDString];
     NSData *transformedPkcs12Data = [leaf exportPKCS12WithPassword:transferPassword];
     if (transformedPkcs12Data == nil) {
-        ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
+        ShowAlertDialog(self, NSLocalizedString(@"Import Error", nil),
                         NSLocalizedString(@"Mumble was unable to export the specified certificate.",
                                           @"Error shown when when the conversion from PKCS12 to DER-encoded X.509 fails."));
         [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
@@ -224,7 +204,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
             MLCertificate *cert = [chain objectAtIndex:i];
             SecCertificateRef secCert = SecCertificateCreateWithData(NULL, (__bridge CFDataRef)[cert certificate]);
             if (secCert == NULL) {
-                ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
+                ShowAlertDialog(self, NSLocalizedString(@"Import Error", nil),
                                 NSLocalizedString(@"Mumble was unable to import one of the intermediate certificates in the certificate chain.", nil));
                 continue;
             }
@@ -236,7 +216,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
                 if (err == errSecDuplicateItem) {
                     // Duplicates are OK in this case.
                 } else {
-                    ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
+                    ShowAlertDialog(self, NSLocalizedString(@"Import Error", nil),
                                     NSLocalizedString(@"Mumble was unable to import one of the intermediate certificates in the certificate chain.", nil));
                 }
             }
@@ -264,7 +244,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
             // Remove the file from disk
             NSError *errObj = nil;
             if ([[NSFileManager defaultManager] removeItemAtPath:pkcs12File error:&errObj] == NO) {
-                ShowAlertDialog(NSLocalizedString(@"Import Error", nil), [errObj localizedFailureReason]);
+                ShowAlertDialog(self, NSLocalizedString(@"Import Error", nil), [errObj localizedFailureReason]);
             }
 
             [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
@@ -273,7 +253,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
             [self updateDocumentActions];
             return;
         } else if (err == errSecDuplicateItem || (err == noErr && data == nil)) {
-            ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
+            ShowAlertDialog(self, NSLocalizedString(@"Import Error", nil),
                             // todo(mkrautz): Keep in sync with MUCertificateCreationView: refactor!
                             NSLocalizedString(@"A certificate with the same name already exist.",
                                               @"Error body when adding a certificate fails because of a subject name clash."));
@@ -281,7 +261,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
             NSString *msg = [NSString stringWithFormat:
                                 NSLocalizedString(@"Mumble was unable to import the certificate.\nError Code: %li",
                                                   @"Generic import error (with error code) for iTunes Import."), (long int)err];
-            ShowAlertDialog(@"Import Error", msg);
+            ShowAlertDialog(self, @"Import Error", msg);
         }
 
         [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
@@ -290,12 +270,12 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         [self showPasswordDialog];
         [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
     } else if (err == errSecDecode) {
-        ShowAlertDialog(NSLocalizedString(@"Import Error", nil), @"Unable to decode PKCS12 file");
+        ShowAlertDialog(self, NSLocalizedString(@"Import Error", nil), @"Unable to decode PKCS12 file");
         [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
     } else {
         NSString *msg = NSLocalizedString(@"Mumble was unable to import the certificate.",
                                           @"Generic import error for iTunes Import.");
-        ShowAlertDialog(NSLocalizedString(@"Import Error", nil), msg);
+        ShowAlertDialog(self, NSLocalizedString(@"Import Error", nil), msg);
         [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
     }
 }

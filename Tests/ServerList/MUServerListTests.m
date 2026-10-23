@@ -51,7 +51,8 @@ static NSData *Fields(NSDictionary<NSNumber *, id> *fields) {
 static void Receive(MLServerModel *model, uint16_t type, NSDictionary *fields) { [model receiveType:type data:Fields(fields)]; }
 static void CheckRows(MUServerListTestController *server, NSInteger expected) {
     [server.tableView layoutIfNeeded];
-    Check([server.tableView numberOfRowsInSection:0] == expected, @"Table row count does not match the complete channel tree");
+    NSInteger actual = [server.tableView numberOfRowsInSection:0];
+    Check(actual == expected, [NSString stringWithFormat:@"Expected %ld channel rows, got %ld (rebuilds: %lu, visible: %@)", (long)expected, (long)actual, (unsigned long)server.rebuildCount, server.view.window ? @"yes" : @"no"]);
 }
 
 static void ServerListChecks(UIWindow *window) {
