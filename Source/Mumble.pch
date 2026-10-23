@@ -3,5 +3,6 @@
 // license that can be found in the LICENSE file.
 
 #ifdef __OBJC__
-@import UIKit;
+#import <UIKit/UIKit.h>
+#import <AVFoundation/AVFoundation.h>
 #endif

@@ -6,50 +6,57 @@
 
 #import "MUWelcomeScreenPhone.h"
 #import "MUWelcomeScreenPad.h"
+#import "MUBackgroundView.h"
 #import "MUDatabase.h"
 #import "MUPublicServerList.h"
 #import "MUConnectionController.h"
 #import "MUNotificationController.h"
-#import "MURemoteControlServer.h"
-#import "MUImage.h"
-#import "MUBackgroundView.h"
+#import "MLClient.h"
+#import <UserNotifications/UserNotifications.h>
 
-#import <MumbleKit/MKAudio.h>
-#import <MumbleKit/MKVersion.h>
+static NSInteger MUApplicationBadgeCount = 0;
+NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudioTransmissionModeDidChangeNotification";
 
-@interface MUApplicationDelegate () <UIApplicationDelegate,
-                                     UIAlertViewDelegate> {
+@interface MUApplicationDelegate () <UIApplicationDelegate, UITabBarControllerDelegate, UINavigationControllerDelegate> {
     UIWindow                  *_window;
     UINavigationController    *_navigationController;
+    UINavigationController    *_settingsNavigationController;
+    UITabBarController        *_tabBarController;
     MUPublicServerListFetcher *_publistFetcher;
     BOOL                      _connectionActive;
+    UINavigationController    *_onboardingNavigationController;
+    NSURL                     *_pendingMumbleURL;
 }
 - (void) setupAudio;
-- (void) forceKeyboardLoad;
 @end
 
 @implementation MUApplicationDelegate
 
++ (void) setApplicationBadgeCount:(NSInteger)count {
+    if (count < 0) {
+        count = 0;
+    }
+    MUApplicationBadgeCount = count;
+    [[UNUserNotificationCenter currentNotificationCenter] setBadgeCount:count withCompletionHandler:nil];
+}
+
++ (void) incrementApplicationBadgeCount {
+    [self setApplicationBadgeCount:MUApplicationBadgeCount + 1];
+}
+
 - (BOOL) application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    (void)application;
+    (void)launchOptions;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(connectionOpened:) name:MUConnectionOpenedNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(connectionClosed:) name:MUConnectionClosedNotification object:nil];
     
-    // Reset application badge, in case something brought it into an inconsistent state.
-    [[UIApplication sharedApplication] setApplicationIconBadgeNumber:0];
-    
-    // Initialize the notification controller
     [MUNotificationController sharedController];
     
-    // Try to fetch an updated public server list
-    _publistFetcher = [[MUPublicServerListFetcher alloc] init];
-    [_publistFetcher attemptUpdate];
-    
-    // Set MumbleKit release string
-    [[MKVersion sharedVersion] setOverrideReleaseString:
-        [NSString stringWithFormat:@"Mumble for iOS %@", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"]]];
+    // Set libmumble release string
+    [[MLVersion sharedVersion] setOverrideReleaseString:
+        [NSString stringWithFormat:@"Mumble for iOS %@", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"]]];
     
     // Enable Opus unconditionally
-    [[MKVersion sharedVersion] setOpusEnabled:YES];
 
     // Register default settings
     [[NSUserDefaults standardUserDefaults] registerDefaults:[NSDictionary dictionaryWithObjectsAndKeys:
@@ -60,36 +67,24 @@
                                                                 @"amplitude",                      @"AudioVADKind",
                                                                 @"vad",                            @"AudioTransmitMethod",
                                                                 [NSNumber numberWithBool:YES],     @"AudioPreprocessor",
-                                                                [NSNumber numberWithBool:YES],     @"AudioEchoCancel",
                                                                 [NSNumber numberWithFloat:1.0f],   @"AudioMicBoost",
                                                                 @"balanced",                       @"AudioQualityKind",
                                                                 [NSNumber numberWithBool:NO],      @"AudioSidetone",
                                                                 [NSNumber numberWithFloat:0.2f],   @"AudioSidetoneVolume",
                                                                 [NSNumber numberWithBool:YES],     @"AudioSpeakerPhoneMode",
-                                                                [NSNumber numberWithBool:YES],     @"AudioOpusCodecForceCELTMode",
+                                                                [NSNumber numberWithBool:NO],      @"AudioOpusLowDelay",
                                                                 // Network
                                                                 [NSNumber numberWithBool:NO],      @"NetworkForceTCP",
                                                                 @"MumbleUser",                     @"DefaultUserName",
                                                         nil]];
 
-    // Disable mixer debugging for all builds.
-    [[NSUserDefaults standardUserDefaults] setObject:[NSNumber numberWithBool:NO] forKey:@"AudioMixerDebug"];
     
-    [self reloadPreferences];
-    [MUDatabase initializeDatabase];
     
-#ifdef ENABLE_REMOTE_CONTROL
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"RemoteControlServerEnabled"]) {
-        [[MURemoteControlServer sharedRemoteControlServer] start];
-    }
-#endif
+    return YES;
+}
     
-    // Try to use a dark keyboard throughout the app's text fields.
-    if (@available(iOS 7, *)) {
-        [[UITextField appearance] setKeyboardAppearance:UIKeyboardAppearanceDark];
-    }
-    
-    _window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+- (void) installUserInterfaceInWindow:(UIWindow *)window {
+    _window = window;
     if (@available(iOS 7, *)) {
     // XXX: don't do it system-wide just yet
     //    _window.tintColor = [UIColor whiteColor];
@@ -121,33 +116,61 @@
     [_window setRootViewController:_navigationController];
     [_window makeKeyAndVisible];
 
-    NSURL *url = [launchOptions objectForKey:UIApplicationLaunchOptionsURLKey];
-    if ([[url scheme] isEqualToString:@"mumble"]) {
-        MUConnectionController *connController = [MUConnectionController sharedController];
-        NSString *hostname = [url host];
-        NSNumber *port = [url port];
-        NSString *username = [url user];
-        NSString *password = [url password];
-        [connController connectToHostname:hostname port:port ? [port integerValue] : 64738 withUsername:username andPassword:password withParentViewController:welcomeScreen];
-        return YES;
-    }
-    return NO;
+    // Database, badge and the public-server refresh are not needed to draw
+    // the first screen. Doing them here keeps them off the launch path.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        [MUDatabase initializeDatabase];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self->_publistFetcher == nil) {
+                self->_publistFetcher = [[MUPublicServerListFetcher alloc] init];
+                [self->_publistFetcher attemptUpdate];
+            }
+        });
+    });
 }
 
-- (BOOL) application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options {
-    if ([[url scheme] isEqualToString:@"mumble"]) {
-        MUConnectionController *connController = [MUConnectionController sharedController];
-        if ([connController isConnected]) {
-            return NO;
-        }
-        NSString *hostname = [url host];
-        NSNumber *port = [url port];
-        NSString *username = [url user];
-        NSString *password = [url password];
-        [connController connectToHostname:hostname port:port ? [port integerValue] : 64738 withUsername:username andPassword:password withParentViewController:_navigationController.visibleViewController];
+- (void)navigationController:(UINavigationController *)navigationController willShowViewController:(UIViewController *)viewController animated:(BOOL)animated {
+    if (navigationController != _settingsNavigationController) return;
+    BOOL isRoot = viewController == navigationController.viewControllers.firstObject;
+    viewController.navigationItem.largeTitleDisplayMode = isRoot ? UINavigationItemLargeTitleDisplayModeInline : UINavigationItemLargeTitleDisplayModeNever;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
+    if (@available(iOS 27.0, *)) {
+        UIBarMinimization *minimization = viewController.navigationItem.navigationBarMinimization;
+        minimization.minimizationBehavior = isRoot ? UIBarMinimizationBehaviorAutomatic : UIBarMinimizationBehaviorNever;
+        viewController.navigationItem.navigationBarMinimization = minimization;
+    }
+#endif
+}
+
+- (void)tabBarController:(UITabBarController *)tabBarController didSelectViewController:(UIViewController *)viewController {
+    // A tab switch can leave a settings detail page whose root is already offscreen.
+    if (viewController == _navigationController) [self reloadPreferences];
+}
+
+- (BOOL) openMumbleURL:(NSURL *)url {
+    if (![[url scheme] isEqualToString:@"mumble"]) {
+        return NO;
+    }
+    if (_onboardingNavigationController) {
+        _pendingMumbleURL = url;
         return YES;
     }
-    return NO;
+    MUConnectionController *connController = [MUConnectionController sharedController];
+    if ([connController isConnected]) {
+        return NO;
+    }
+    NSString *hostname = [url host];
+    NSNumber *port = [url port];
+    NSString *username = [url user];
+    NSString *password = [url password];
+    _tabBarController.selectedViewController = _navigationController;
+    [self reloadPreferences];
+    UIViewController *parent = _navigationController.visibleViewController;
+    if (parent == nil) {
+        parent = _navigationController;
+    }
+    [connController connectToHostname:hostname port:port ? [port integerValue] : 64738 withUsername:username andPassword:password withParentViewController:parent];
+    return YES;
 }
 
 - (void) applicationWillTerminate:(UIApplication *)application {
@@ -157,22 +180,22 @@
 - (void) setupAudio {
     // Set up a good set of default audio settings.
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    MKAudioSettings settings;
+    MLAudioSettings settings = {0};
 
     if ([[defaults stringForKey:@"AudioTransmitMethod"] isEqualToString:@"vad"])
-        settings.transmitType = MKTransmitTypeVAD;
+        settings.transmitType = MLTransmitTypeVAD;
     else if ([[defaults stringForKey:@"AudioTransmitMethod"] isEqualToString:@"continuous"])
-        settings.transmitType = MKTransmitTypeContinuous;
+        settings.transmitType = MLTransmitTypeContinuous;
     else if ([[defaults stringForKey:@"AudioTransmitMethod"] isEqualToString:@"ptt"])
-        settings.transmitType = MKTransmitTypeToggle;
+        settings.transmitType = MLTransmitTypeToggle;
     else
-        settings.transmitType = MKTransmitTypeVAD;
+        settings.transmitType = MLTransmitTypeVAD;
     
-    settings.vadKind = MKVADKindAmplitude;
+    settings.vadKind = MLVADKindAmplitude;
     if ([[defaults stringForKey:@"AudioVADKind"] isEqualToString:@"snr"]) {
-        settings.vadKind = MKVADKindSignalToNoise;
+        settings.vadKind = MLVADKindSignalToNoise;
     } else if ([[defaults stringForKey:@"AudioVADKind"] isEqualToString:@"amplitude"]) {
-        settings.vadKind = MKVADKindAmplitude;
+        settings.vadKind = MLVADKindAmplitude;
     }
     
     settings.vadMin = [defaults floatForKey:@"AudioVADBelow"];
@@ -180,31 +203,19 @@
     
     NSString *quality = [defaults stringForKey:@"AudioQualityKind"];
     if ([quality isEqualToString:@"low"]) {
-        // Will fall back to CELT if the
-        // server requires it for inter-op.
-        settings.codec = MKCodecFormatOpus;
+
         settings.quality = 16000;
         settings.audioPerPacket = 6;
     } else if ([quality isEqualToString:@"balanced"]) {
-        // Will fall back to CELT if the 
-        // server requires it for inter-op.
-        settings.codec = MKCodecFormatOpus;
+
         settings.quality = 40000;
         settings.audioPerPacket = 2;
     } else if ([quality isEqualToString:@"high"] || [quality isEqualToString:@"opus"]) {
-        // Will fall back to CELT if the 
-        // server requires it for inter-op.
-        settings.codec = MKCodecFormatOpus;
+
         settings.quality = 72000;
         settings.audioPerPacket = 1;
     } else {
-        settings.codec = MKCodecFormatCELT;
-        if ([[defaults stringForKey:@"AudioCodec"] isEqualToString:@"opus"])
-            settings.codec = MKCodecFormatOpus;
-        if ([[defaults stringForKey:@"AudioCodec"] isEqualToString:@"celt"])
-            settings.codec = MKCodecFormatCELT;
-        if ([[defaults stringForKey:@"AudioCodec"] isEqualToString:@"speex"])
-            settings.codec = MKCodecFormatSpeex;
+
         settings.quality = (int) [defaults integerForKey:@"AudioQualityBitrate"];
         settings.audioPerPacket = (int) [defaults integerForKey:@"AudioQualityFrames"];
     }
@@ -216,11 +227,7 @@
     settings.outputDelay = 0; /* 10 ms */
     settings.micBoost = [defaults floatForKey:@"AudioMicBoost"];
     settings.enablePreprocessor = [defaults boolForKey:@"AudioPreprocessor"];
-    if (settings.enablePreprocessor) {
-        settings.enableEchoCancellation = [defaults boolForKey:@"AudioEchoCancel"];
-    } else {
-        settings.enableEchoCancellation = NO;
-    }
+    settings.enableEchoCancellation = settings.enablePreprocessor;
 
     settings.enableSideTone = [defaults boolForKey:@"AudioSidetone"];
     settings.sidetoneVolume = [defaults floatForKey:@"AudioSidetoneVolume"];
@@ -231,12 +238,35 @@
         settings.preferReceiverOverSpeaker = YES;
     }
     
-    settings.opusForceCELTMode = [defaults boolForKey:@"AudioOpusCodecForceCELTMode"];
-    settings.audioMixerDebug = [defaults boolForKey:@"AudioMixerDebug"];
+    settings.opusForceCELTMode = [defaults boolForKey:@"AudioOpusLowDelay"];
     
-    MKAudio *audio = [MKAudio sharedAudio];
+    MLAudio *audio = [MLAudio sharedAudio];
+    MLAudioSettings previous, current;
+    [audio readAudioSettings:&previous];
     [audio updateAudioSettings:&settings];
-    [audio restart];
+    [audio readAudioSettings:&current];
+    // Detection mode and thresholds are applied on the audio queue without
+    // interrupting the microphone or rebuilding the native voice processor.
+    BOOL changed = previous.transmitType != current.transmitType ||
+        previous.quality != current.quality ||
+        previous.audioPerPacket != current.audioPerPacket ||
+        previous.noiseSuppression != current.noiseSuppression ||
+        previous.amplification != current.amplification ||
+        previous.jitterBufferSize != current.jitterBufferSize ||
+        previous.volume != current.volume ||
+        previous.outputDelay != current.outputDelay ||
+        previous.micBoost != current.micBoost ||
+        previous.enablePreprocessor != current.enablePreprocessor ||
+        previous.enableEchoCancellation != current.enableEchoCancellation ||
+        previous.enableSideTone != current.enableSideTone ||
+        previous.sidetoneVolume != current.sidetoneVolume ||
+        previous.preferReceiverOverSpeaker != current.preferReceiverOverSpeaker ||
+        previous.opusForceCELTMode != current.opusForceCELTMode;
+    // Restart only when the engine is already up. Starting Voice Processing
+    // during launch blocks the process before the first screen appears.
+    if (changed && [audio isRunning]) {
+        [audio restart];
+    }
 }
 
 // Reload application preferences...
@@ -244,66 +274,74 @@
     [self setupAudio];
 }
 
-- (void) forceKeyboardLoad {
-    UITextField *textField = [[UITextField alloc] initWithFrame:CGRectZero];
-    [_window addSubview:textField];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
-    [textField becomeFirstResponder];
+- (void)setAudioTransmitMethod:(NSString *)method {
+    NSArray<NSString *> *methods = @[@"vad", @"ptt", @"continuous"];
+    NSUInteger index = [methods indexOfObject:method];
+    if (index == NSNotFound) return;
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([[defaults stringForKey:@"AudioTransmitMethod"] isEqualToString:method]) return;
+    [defaults setObject:method forKey:@"AudioTransmitMethod"];
+    MLAudio *audio = MLAudio.sharedAudio;
+    [audio setForceTransmit:NO];
+    MLAudioSettings settings;
+    [audio readAudioSettings:&settings];
+    settings.transmitType = index == 0 ? MLTransmitTypeVAD : index == 1 ? MLTransmitTypeToggle : MLTransmitTypeContinuous;
+    // Transmission is evaluated for every audio packet; switching it does not
+    // require rebuilding the microphone or interrupting server playback.
+    [audio updateAudioSettings:&settings];
+    [NSNotificationCenter.defaultCenter postNotificationName:MUAudioTransmissionModeDidChangeNotification object:self];
 }
 
-- (void) keyboardWillShow:(NSNotification *)notification {
-    for (UIView *view in [_window subviews]) {
-        if ([view isFirstResponder]) {
-            [view resignFirstResponder];
-            [view removeFromSuperview];
-            
-            [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillShowNotification object:nil];
-        }
-    }
-}
 
 - (void) connectionOpened:(NSNotification *)notification {
     _connectionActive = YES;
+    [self reloadPreferences];
+    if (![[MLAudio sharedAudio] isRunning]) {
+        [[MLAudio sharedAudio] start];
+        [[MLAudio sharedAudio] resumeIfNeeded];
+    }
 }
 
 - (void) connectionClosed:(NSNotification *)notification {
     _connectionActive = NO;
+    [[MLAudio sharedAudio] stop];
 }
 
-- (void) applicationWillResignActive:(UIApplication *)application {
-    // If we have any active connections, don't stop MKAudio. This is
+- (void) sceneWillResignActive {
+    // If we have any active connections, don't stop MLAudio. This is
     // for 'clicking-the-home-button' invocations of this method.
     //
-    // In case we've been backgrounded by a phone call, MKAudio will
+    // In case we've been backgrounded by a phone call, MLAudio will
     // already have shut itself down.
     if (!_connectionActive) {
-        NSLog(@"MumbleApplicationDelegate: Not connected to a server. Stopping MKAudio.");
-        [[MKAudio sharedAudio] stop];
+        NSLog(@"MumbleApplicationDelegate: Not connected to a server. Stopping MLAudio.");
+        [[MLAudio sharedAudio] stop];
         
-#ifdef ENABLE_REMOTE_CONTROL
-        // Also terminate the remote control server.
-        [[MURemoteControlServer sharedRemoteControlServer] stop];
-#endif
     }
 }
 
-- (void) applicationDidBecomeActive:(UIApplication *)application {
+- (void) sceneDidBecomeActive {
     // It is possible that we will become active after a phone call has ended.
-    // In the case of phone calls, MKAudio will automatically stop itself, to
+    // In the case of phone calls, MLAudio will automatically stop itself, to
     // allow the phone call to go through. However, once we're back inside the
     // application, we have to start ourselves again.
     //
     // For regular backgrounding, we usually don't turn off the audio system, and
-    // we won't have to start it again.
-    if (![[MKAudio sharedAudio] isRunning]) {
-        NSLog(@"MumbleApplicationDelegate: MKAudio not running. Starting it.");
-        [[MKAudio sharedAudio] start];
+    // we won't have to start it again. Don't start it just because the app
+    // became active; that pulls up the microphone before the user connects.
+    if (_connectionActive) {
+        MLAudio *audio = MLAudio.sharedAudio;
+        if (!audio.isRunning) {
+            NSLog(@"MumbleApplicationDelegate: MLAudio not running. Starting it.");
+            [self reloadPreferences];
+            [audio start];
+        }
+        // Engine.isRunning does not prove the microphone tap is delivering PCM.
+        [audio resumeIfNeeded];
         
-#if ENABLE_REMOTE_CONTROL
-        // Re-start the remote control server.
-        [[MURemoteControlServer sharedRemoteControlServer] stop];
-        [[MURemoteControlServer sharedRemoteControlServer] start];
-#endif
+    } else {
+        // A visible calibration meter also owns a foreground capture preview.
+        [MLAudio.sharedAudio resumeIfNeeded];
     }
 }
 

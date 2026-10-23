@@ -160,14 +160,14 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     NSString *pkcs12File = [[documentDirs objectAtIndex:0] stringByAppendingFormat:@"/%@", fileName];
     NSData *pkcs12Data = [NSData dataWithContentsOfFile:pkcs12File];
 
-    NSArray *chain = [MKCertificate certificatesWithPKCS12:pkcs12Data password:password];
+    NSArray *chain = [MLCertificate certificatesWithPKCS12:pkcs12Data password:password];
     if ([chain count] == 0) {
         [self showPasswordDialog];
         [[self tableView] deselectRowAtIndexPath:_attemptIndexPath animated:YES];
         return;
     }
     
-    MKCertificate *leaf = [chain objectAtIndex:0];
+    MLCertificate *leaf = [chain objectAtIndex:0];
     NSData *transformedPkcs12Data = [leaf exportPKCS12WithPassword:@""];
     if (transformedPkcs12Data == nil) {
         ShowAlertDialog(NSLocalizedString(@"Import Error", nil),
@@ -184,7 +184,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
     if (err == errSecSuccess && [items count] > 0) {
         // Add all elements except the leaf certificate to the keychain
         for (int i = 1; i < [chain count]; i++) {
-            MKCertificate *cert = [chain objectAtIndex:i];
+            MLCertificate *cert = [chain objectAtIndex:i];
             SecCertificateRef secCert = SecCertificateCreateWithData(NULL, (CFDataRef)[cert certificate]);
             if (secCert == NULL) {
                 ShowAlertDialog(NSLocalizedString(@"Import Error", nil),

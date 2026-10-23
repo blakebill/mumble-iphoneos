@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -13,16 +14,12 @@
 #import "MUDatabase.h"
 #import "MUAudioMixerDebugViewController.h"
 
-#import <MumbleKit/MKConnection.h>
-#import <MumbleKit/MKServerModel.h>
-#import <MumbleKit/MKCertificate.h>
-#import <MumbleKit/MKAudio.h>
 
 #import "MKNumberBadgeView.h"
 
-@interface MUServerRootViewController () <MKConnectionDelegate, MKServerModelDelegate> {
-    MKConnection                *_connection;
-    MKServerModel               *_model;
+@interface MUServerRootViewController () <MLConnectionDelegate, MLServerModelDelegate> {
+    MLConnection                *_connection;
+    MLServerModel               *_model;
     
     NSInteger                   _segmentIndex;
     UISegmentedControl          *_segmentedControl;
@@ -40,7 +37,7 @@
 
 @implementation MUServerRootViewController
 
-- (id) initWithConnection:(MKConnection *)conn andServerModel:(MKServerModel *)model {
+- (id) initWithConnection:(MLConnection *)conn andServerModel:(MLServerModel *)model {
     if ((self = [super init])) {
         _connection = conn;
         _model = model;
@@ -152,24 +149,24 @@
 
     [_segmentedControl performSelector:@selector(bringSubviewToFront:) withObject:_numberBadgeView afterDelay:0.0f];
 
-    [[MKAudio sharedAudio] setForceTransmit:NO];
+    [[MLAudio sharedAudio] setForceTransmit:NO];
 }
 
-#pragma mark - MKConnection delegate
+#pragma mark - MLConnection delegate
 
-- (void) connectionOpened:(MKConnection *)conn {
+- (void) connectionOpened:(MLConnection *)conn {
 }
 
-- (void) connection:(MKConnection *)conn rejectedWithReason:(MKRejectReason)reason explanation:(NSString *)explanation {
+- (void) connection:(MLConnection *)conn rejectedWithReason:(MLRejectReason)reason explanation:(NSString *)explanation {
 }
 
-- (void) connection:(MKConnection *)conn trustFailureInCertificateChain:(NSArray *)chain {
+- (void) connection:(MLConnection *)conn trustFailureInCertificateChain:(NSArray *)chain {
 }
 
-- (void) connection:(MKConnection *)conn unableToConnectWithError:(NSError *)err {
+- (void) connection:(MLConnection *)conn unableToConnectWithError:(NSError *)err {
 }
 
-- (void) connection:(MKConnection *)conn closedWithError:(NSError *)err {
+- (void) connection:(MLConnection *)conn closedWithError:(NSError *)err {
     if (err) {
         UIAlertController *alertCtrl = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"Connection closed", nil)
                                                                            message:[err localizedDescription]
@@ -184,9 +181,9 @@
     }
 }
 
-#pragma mark - MKServerModel delegate
+#pragma mark - MLServerModel delegate
 
-- (void) serverModel:(MKServerModel *)model userKicked:(MKUser *)user byUser:(MKUser *)actor forReason:(NSString *)reason {
+- (void) serverModel:(MLServerModel *)model userKicked:(MLUser *)user byUser:(MLUser *)actor forReason:(NSString *)reason {
     if (user == [model connectedUser]) {
         NSString *reasonMsg = reason ? reason : NSLocalizedString(@"(No reason)", nil);
         NSString *title = NSLocalizedString(@"You were kicked", nil);
@@ -207,7 +204,7 @@
     }
 }
 
-- (void) serverModel:(MKServerModel *)model userBanned:(MKUser *)user byUser:(MKUser *)actor forReason:(NSString *)reason {
+- (void) serverModel:(MLServerModel *)model userBanned:(MLUser *)user byUser:(MLUser *)actor forReason:(NSString *)reason {
     if (user == [model connectedUser]) {
         NSString *reasonMsg = reason ? reason : NSLocalizedString(@"(No reason)", nil);
         NSString *title = NSLocalizedString(@"You were banned", nil);
@@ -228,27 +225,27 @@
     }
 }
 
-- (void) serverModel:(MKServerModel *)model permissionDenied:(MKPermission)perm forUser:(MKUser *)user inChannel:(MKChannel *)channel {
+- (void) serverModel:(MLServerModel *)model permissionDenied:(MLPermission)perm forUser:(MLUser *)user inChannel:(MLChannel *)channel {
     [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Permission denied", nil)];
 }
 
-- (void) serverModelInvalidChannelNameError:(MKServerModel *)model {
+- (void) serverModelInvalidChannelNameError:(MLServerModel *)model {
     [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Invalid channel name", nil)];
 }
 
-- (void) serverModelModifySuperUserError:(MKServerModel *)model {
+- (void) serverModelModifySuperUserError:(MLServerModel *)model {
     [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Cannot modify SuperUser", nil)];
 }
 
-- (void) serverModelTextMessageTooLongError:(MKServerModel *)model {
+- (void) serverModelTextMessageTooLongError:(MLServerModel *)model {
     [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Message too long", nil)];
 }
 
-- (void) serverModelTemporaryChannelError:(MKServerModel *)model {
+- (void) serverModelTemporaryChannelError:(MLServerModel *)model {
     [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Not permitted in temporary channel", nil)];
 }
 
-- (void) serverModel:(MKServerModel *)model missingCertificateErrorForUser:(MKUser *)user {
+- (void) serverModel:(MLServerModel *)model missingCertificateErrorForUser:(MLUser *)user {
     if (user == nil) {
         [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Missing certificate", nil)];
     } else {
@@ -256,7 +253,7 @@
     }
 }
 
-- (void) serverModel:(MKServerModel *)model invalidUsernameErrorForName:(NSString *)name {
+- (void) serverModel:(MLServerModel *)model invalidUsernameErrorForName:(NSString *)name {
     if (name == nil) {
         [[MUNotificationController sharedController] addNotification:@"Invalid username"];
     } else {
@@ -264,11 +261,11 @@
     }
 }
 
-- (void) serverModelChannelFullError:(MKServerModel *)model {
+- (void) serverModelChannelFullError:(MLServerModel *)model {
     [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Channel is full", nil)];
 }
 
-- (void) serverModel:(MKServerModel *)model permissionDeniedForReason:(NSString *)reason {
+- (void) serverModel:(MLServerModel *)model permissionDeniedForReason:(NSString *)reason {
     if (reason == nil) {
         [[MUNotificationController sharedController] addNotification:NSLocalizedString(@"Permission denied", nil)];
     } else {
@@ -279,7 +276,7 @@
     }
 }
 
-- (void) serverModel:(MKServerModel *)model textMessageReceived:(MKTextMessage *)msg fromUser:(MKUser *)user {
+- (void) serverModel:(MLServerModel *)model textMessageReceived:(MLTextMessage *)msg fromUser:(MLUser *)user {
     if (_segmentedControl.selectedSegmentIndex != 1) { // When not in messages view
         _unreadMessages++;
         _numberBadgeView.value = _unreadMessages;
@@ -290,7 +287,7 @@
 #pragma mark - Actions
 
 - (void) actionButtonClicked:(id)sender {
-    MKUser *connUser = [_model connectedUser];
+    MLUser *connUser = [_model connectedUser];
     BOOL inMessagesView = [[self viewControllers] objectAtIndex:0] == _messagesView;
     
     UIAlertController *sheetCtrl = [UIAlertController alertControllerWithTitle:nil

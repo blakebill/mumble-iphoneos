@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9,7 +10,6 @@
 #import "MUImage.h"
 #import "MUBackgroundView.h"
 
-#import <MumbleKit/MKCertificate.h>
 
 static void ShowAlertDialog(NSString *title, NSString *msg) {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -273,7 +273,7 @@ static void ShowAlertDialog(NSString *title, NSString *msg) {
         OSStatus err = noErr;
         
         // Generate a certificate for this identity.
-        MKCertificate *cert = [MKCertificate selfSignedCertificateWithName:name email:email];
+        MLCertificate *cert = [MLCertificate selfSignedCertificateWithName:name email:email];
         NSData *pkcs12 = [cert exportPKCS12WithPassword:@""];
         if (pkcs12 == nil) {
             NSString *title = NSLocalizedString(@"Unable to generate certificate", @"Certificate generation error title");

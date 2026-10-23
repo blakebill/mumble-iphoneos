@@ -11,7 +11,7 @@
     NSString        *_hostname;
     NSString        *_port;
     NSString        *_username;
-    MKServerPinger  *_pinger;
+    MLServerPinger  *_pinger;
 }
 - (UIImage *) drawPingImageWithPingValue:(NSUInteger)pingMs andUserCount:(NSUInteger)userCount isFull:(BOOL)isFull;
 @end
@@ -35,7 +35,7 @@
 
     if ([hostName length] > 0) {
         _hostname = [hostName copy];
-        _pinger = [[MKServerPinger alloc] initWithHostname:_hostname port:_port];
+        _pinger = [[MLServerPinger alloc] initWithHostname:_hostname port:_port];
         [_pinger setDelegate:self];
     } else {
         _hostname = NSLocalizedString(@"(No Server)", nil);
@@ -61,7 +61,7 @@
 
     _pinger = nil;
     if ([_hostname length] > 0) {
-        _pinger = [[MKServerPinger alloc] initWithHostname:_hostname port:_port];
+        _pinger = [[MLServerPinger alloc] initWithHostname:_hostname port:_port];
         [_pinger setDelegate:self]; 
     } else {
         _hostname = NSLocalizedString(@"(No Server)", nil);
@@ -135,7 +135,7 @@
     return img;
 }
 
-- (void) serverPingerResult:(MKServerPingerResult *)result {
+- (void) serverPingerResult:(MLServerPingerResult *)result {
     NSUInteger pingValue = (NSUInteger)(result->ping * 1000.0f);
     NSUInteger userCount = (NSUInteger)(result->cur_users);
     BOOL isFull = result->cur_users == result->max_users;

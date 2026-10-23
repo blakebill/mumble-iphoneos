@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11,7 +12,6 @@
 #import "MUImage.h"
 #import "MUBackgroundView.h"
 
-#import <MumbleKit/MKAudio.h>
 
 @implementation MUAdvancedAudioPreferencesViewController
 
@@ -38,7 +38,7 @@
 
     self.tableView.scrollEnabled = YES;
 
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioSubsystemRestarted:) name:MKAudioDidRestartNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioSubsystemRestarted:) name:MLAudioDidRestartNotification object:nil];
     
     [self.tableView reloadData];
 }
@@ -114,7 +114,7 @@
                 UISwitch *echoCancelSwitch = [[UISwitch alloc] init];
                 echoCancelSwitch.onTintColor = [UIColor blackColor];
                 echoCancelSwitch.on = [defaults boolForKey:@"AudioEchoCancel"];
-                echoCancelSwitch.enabled = [[MKAudio sharedAudio] echoCancellationAvailable];
+                echoCancelSwitch.enabled = [[MLAudio sharedAudio] echoCancellationAvailable];
                 if (!echoCancelSwitch.enabled) {
                     echoCancelSwitch.on = NO;
                 }
@@ -204,7 +204,7 @@
 - (UIView *) tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     if (section == 1) {
         if ([[NSUserDefaults standardUserDefaults] boolForKey:@"AudioPreprocessor"]) {
-            if (![[MKAudio sharedAudio] echoCancellationAvailable]) {
+            if (![[MLAudio sharedAudio] echoCancellationAvailable]) {
                 NSString *echoCancelNotAvail = NSLocalizedString(@"Echo Cancellation is not available when using the current audio peripheral.", nil);
                 MUTableViewHeaderLabel *lbl = [MUTableViewHeaderLabel labelWithText:echoCancelNotAvail];
                 lbl.font = [UIFont systemFontOfSize:16.0f];
@@ -220,7 +220,7 @@
 - (CGFloat) tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (section == 1) {
         if ([[NSUserDefaults standardUserDefaults] boolForKey:@"AudioPreprocessor"]) {
-            if (![[MKAudio sharedAudio] echoCancellationAvailable]) {
+            if (![[MLAudio sharedAudio] echoCancellationAvailable]) {
                 return 44.0f;
             }
         }

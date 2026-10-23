@@ -1,9 +1,9 @@
+#import "MLClient.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 #import "MUPublicServerList.h"
-#import <MumbleKit/MKServices.h>
 
 @interface MUPublicServerList () {
     NSData              *_serverListXML;
@@ -31,7 +31,7 @@
 }
 
 - (void) attemptUpdate {
-    NSURLRequest *req = [NSURLRequest requestWithURL:[MKServices regionalServerListURL]];
+    NSURLRequest *req = [NSURLRequest requestWithURL:[MLServices regionalServerListURL]];
     [[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
         if (error || data == nil) {
             return;

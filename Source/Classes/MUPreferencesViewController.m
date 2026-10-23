@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2010 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -15,7 +16,6 @@
 #import "MUImage.h"
 #import "MUBackgroundView.h"
 
-#import <MumbleKit/MKCertificate.h>
 
 @interface MUPreferencesViewController () {
     UITextField *_activeTextField;
@@ -164,7 +164,7 @@
             UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"PrefCertificateCell"];
             if (cell == nil)
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"PrefCertificateCell"];
-            MKCertificate *cert = [MUCertificateController defaultCertificate];
+            MLCertificate *cert = [MUCertificateController defaultCertificate];
             cell.textLabel.text = NSLocalizedString(@"Certificate", nil);
             cell.detailTextLabel.text = cert ? [cert subjectName] : NSLocalizedString(@"None", @"None (No certificate chosen)");
             cell.detailTextLabel.textColor = [MUColor selectedTextColor];

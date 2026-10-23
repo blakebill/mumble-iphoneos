@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2012 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9,7 +10,6 @@
 
 #import "MURemoteControlServer.h"
 
-#import <MumbleKit/MKAudio.h>
 
 @interface MURemoteControlServer () {
     NSMutableArray *_activeSocks;
@@ -40,7 +40,7 @@ static void *serverThread(void *udata) {
         unsigned char on = action & 0x1;
         unsigned char code = action & ~0x1;
         if (code == 0) { // PTT
-            MKAudio *audio = [MKAudio sharedAudio];
+            MLAudio *audio = [MLAudio sharedAudio];
             [audio setForceTransmit:on > 0];
         }
     }

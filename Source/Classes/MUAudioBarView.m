@@ -1,3 +1,4 @@
+#import "MLClient.h"
 // Copyright 2009-2011 The 'Mumble for iOS' Developers. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -5,7 +6,6 @@
 #import "MUAudioBarView.h"
 #import "MUColor.h"
 
-#import <MumbleKit/MKAudio.h>
 
 @interface MUAudioBarView () {
     CGFloat _below;
@@ -106,7 +106,7 @@
 }
 
 - (void) tickTock {
-    MKAudio *audio = [MKAudio sharedAudio];
+    MLAudio *audio = [MLAudio sharedAudio];
     NSString *kind = [[NSUserDefaults standardUserDefaults] objectForKey:@"AudioVADKind"];
     if (![[NSUserDefaults standardUserDefaults] boolForKey:@"AudioPreprocessor"])
         kind = @"amplitude";
