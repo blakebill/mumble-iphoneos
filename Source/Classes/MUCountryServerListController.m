@@ -51,8 +51,9 @@
     [self.view addSubview:_tableView];
     [NSLayoutConstraint activateConstraints:@[
         [_tableView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor], [_tableView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [_tableView.topAnchor constraintEqualToAnchor:self.view.topAnchor], [_tableView.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor]
+        [_tableView.topAnchor constraintEqualToAnchor:self.view.topAnchor], [_tableView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
     ]];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardFrameWillChange:) name:UIKeyboardWillChangeFrameNotification object:nil];
     _searchController = [[UISearchController alloc] initWithSearchResultsController:nil];
     _searchController.searchResultsUpdater = self;
     _searchController.obscuresBackgroundDuringPresentation = NO;
@@ -67,10 +68,20 @@
     self.title = _countryName;
 }
 
-- (void)viewWillDisappear:(BOOL)animated {
-    [super viewWillDisappear:animated];
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
 
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+- (void)keyboardFrameWillChange:(NSNotification *)notification {
+    CGRect frame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    CGRect local = [self.view convertRect:frame fromView:nil];
+    CGFloat overlap = CGRectGetMaxY(self.view.bounds) - CGRectGetMinY(local);
+    if (overlap < 0 || overlap >= CGRectGetHeight(self.view.bounds)) overlap = 0;
+    UIEdgeInsets insets = _tableView.contentInset;
+    if (fabs(insets.bottom - overlap) < 0.5) return;
+    insets.bottom = overlap;
+    _tableView.contentInset = insets;
+    _tableView.scrollIndicatorInsets = insets;
 }
 
 #pragma mark -

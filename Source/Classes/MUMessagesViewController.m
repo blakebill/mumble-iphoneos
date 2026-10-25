@@ -64,7 +64,7 @@
     if ((self = [super init])) {
         _model = model;
         [_model addDelegate:self];
-        _msgdb = [[MUMessagesDatabase alloc] init];
+        _msgdb = [self makeMessageStore];
         _messageHeights = [NSMutableDictionary dictionary];
     }
     return self;
@@ -75,12 +75,33 @@
 }
 
 - (void) clearAllMessages {
-    _msgdb = [[MUMessagesDatabase alloc] init];
+    _msgdb = [self makeMessageStore];
     [_messageHeights removeAllObjects];
     [_tableView reloadData];
 }
 
 #pragma mark - View lifecycle
+
+- (MUMessagesDatabase *)makeMessageStore {
+    MUMessagesDatabase *store=[MUMessagesDatabase new];
+    __weak MUMessagesViewController *weakSelf=self;
+    __weak MUMessagesDatabase *weakStore=store;
+    store.messageDidLoad=^(NSInteger row,MUTextMessage *message) {
+        MUMessagesViewController *controller=weakSelf;
+        if(!controller || controller->_msgdb!=weakStore)return;
+        MUMessageBubbleTableViewCell *cell=[controller->_tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]];
+        [cell setShownImageSizes:message.embeddedImageSizes];[cell setShownImages:message.embeddedImages];
+    };
+    return store;
+}
+- (void)storeMessage:(MLTextMessage *)message heading:(NSString *)heading sentBySelf:(BOOL)sentBySelf {
+    MUMessagesDatabase *store=_msgdb;
+    __weak MUMessagesViewController *weakSelf=self;
+    [store addMessage:message withHeading:heading andSentBySelf:sentBySelf completion:^{
+        MUMessagesViewController *controller=weakSelf;
+        if(controller && controller->_msgdb==store)[controller appendLastMessageSentBySelf:sentBySelf];
+    }];
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -438,6 +459,7 @@
 - (void)configureMessageCell:(MUMessageBubbleTableViewCell *)cell message:(MUTextMessage *)txtMsg {
     [cell setHeading:[txtMsg heading]];
     [cell setMessage:[txtMsg message]];
+    [cell setShownImageSizes:txtMsg.embeddedImageSizes];
     [cell setShownImages:[txtMsg embeddedImages]];
     [cell setDate:[txtMsg date]];
     if ([txtMsg embeddedLinks].count) {
@@ -470,7 +492,7 @@
             footer = NSLocalizedString(@"1 attachment", nil);
         }
     }
-    CGFloat height = [MUMessageBubbleTableViewCell heightForCellWithHeading:[txtMsg heading] message:[txtMsg message] images:[txtMsg embeddedImages] footer:footer date:[txtMsg date] width:CGRectGetWidth(tableView.bounds) - tableView.safeAreaInsets.left - tableView.safeAreaInsets.right traitCollection:tableView.traitCollection];
+    CGFloat height = [MUMessageBubbleTableViewCell heightForCellWithHeading:[txtMsg heading] message:[txtMsg message] images:txtMsg.embeddedImageSizes footer:footer date:[txtMsg date] width:CGRectGetWidth(tableView.bounds) - tableView.safeAreaInsets.left - tableView.safeAreaInsets.right traitCollection:tableView.traitCollection];
     _messageHeights[@(indexPath.row)] = @(height);
     return height;
 }
@@ -521,13 +543,12 @@
         if (channel) [_model sendTextMessage:message toChannel:channel];
     }
     if (!destination.length) return;
-    [_msgdb addMessage:message withHeading:[NSString stringWithFormat:NSLocalizedString(@"To %@", @"Message recipient title"), destination] andSentBySelf:YES];
+    [self storeMessage:message heading:[NSString stringWithFormat:NSLocalizedString(@"To %@", @"Message recipient title"), destination] sentBySelf:YES];
     _textView.text = nil;
     [self removePhoto:nil];
     [self updateComposerHeight];
     [self updateSendButton];
     _followKeyboardChanges = YES;
-    [self appendLastMessageSentBySelf:YES];
 }
 
 - (void)showPhotoPicker:(id)sender {
@@ -613,10 +634,15 @@
 }
 
 - (void)appendLastMessageSentBySelf:(BOOL)sentBySelf {
-    if (!_tableView || !self.view.window || CGRectIsEmpty(self.view.bounds)) { [_tableView reloadData]; return; }
+    if (!_tableView || !self.view.window || CGRectIsEmpty(_tableView.bounds)) { [_tableView reloadData]; return; }
     BOOL follow = sentBySelf || (!_tableView.isDragging && !_tableView.isDecelerating && ![self editMenuIsVisible] &&
                                 _tableView.contentOffset.y >= [self bottomMessageOffset].y - 80);
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:_msgdb.count - 1 inSection:0];
+    if([_tableView numberOfRowsInSection:0]!=indexPath.row) {
+        [_tableView reloadData];
+        if(follow){[_tableView layoutIfNeeded];[_tableView setContentOffset:[self bottomMessageOffset] animated:NO];}
+        return;
+    }
     BOOL animate = !UIAccessibilityIsReduceMotionEnabled();
     [_tableView performBatchUpdates:^{
         [self->_tableView insertRowsAtIndexPaths:@[indexPath] withRowAnimation:animate ? UITableViewRowAnimationBottom : UITableViewRowAnimationNone];
@@ -640,6 +666,7 @@
 
 - (void) messageBubbleTableViewCellRequestedCopy:(MUMessageBubbleTableViewCell *)cell {
     NSIndexPath *indexPath = [_tableView indexPathForCell:cell];
+    if(!indexPath)return;
     MUTextMessage *txtMsg = [_msgdb messageAtIndex:[indexPath row]];
     UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
     [pasteboard setValue:[txtMsg message] forPasteboardType:UTTypeUTF8PlainText.identifier];
@@ -647,6 +674,7 @@
 
 - (void) messageBubbleTableViewCellRequestedDeletion:(MUMessageBubbleTableViewCell *)cell {
     NSIndexPath *indexPath = [_tableView indexPathForCell:cell];
+    if(!indexPath)return;
     [_msgdb clearMessageAtIndex:[indexPath row]];
     [_messageHeights removeObjectForKey:@(indexPath.row)];
     [_tableView reloadRowsAtIndexPaths:[NSArray arrayWithObject:indexPath] withRowAnimation:UITableViewRowAnimationFade];
@@ -654,15 +682,18 @@
 
 - (void) messageBubbleTableViewCellRequestedAttachmentViewer:(MUMessageBubbleTableViewCell *)cell {
     NSIndexPath *indexPath = [_tableView indexPathForCell:cell];
+    if(!indexPath)return;
     MUTextMessage *txtMsg = [_msgdb messageAtIndex:[indexPath row]];
     if ([txtMsg hasAttachments]) {
         [self.view endEditing:YES];
         [cell setSelected:YES];
+        MUMessagesDatabase *store=_msgdb;
+        MUImageLoader loader=txtMsg.embeddedImageSizes.count ? ^(void (^completion)(NSArray<UIImage *> *)) { [store loadImagesAtIndex:indexPath.row completion:completion]; } : nil;
         if ([[txtMsg embeddedLinks] count] > 0) {
-            MUMessageAttachmentViewController *attachmentViewController = [[MUMessageAttachmentViewController alloc] initWithImages:[txtMsg embeddedImages] andLinks:[txtMsg embeddedLinks]];
+            MUMessageAttachmentViewController *attachmentViewController = [[MUMessageAttachmentViewController alloc] initWithImages:txtMsg.embeddedImages andLinks:txtMsg.embeddedLinks imageCount:txtMsg.embeddedImageSizes.count imageLoader:loader];
             [self.navigationController pushViewController:attachmentViewController animated:YES];
         } else {
-            MUImageViewController *imgViewController = [[MUImageViewController alloc] initWithImages:[txtMsg embeddedImages]];
+            MUImageViewController *imgViewController = [[MUImageViewController alloc] initWithImageLoader:loader];
             [self.navigationController pushViewController:imgViewController animated:YES];
         }
     }
@@ -698,8 +729,7 @@
 
 - (void) serverModel:(MLServerModel *)model joinedServerAsUser:(MLUser *)user withWelcomeMessage:(MLTextMessage *)msg {
     if (!_user && !_channel && !_tree) [self setReceiverName:user.channel.channelName symbol:@"person.2.circle.fill"];
-    [_msgdb addMessage:msg withHeading:NSLocalizedString(@"Welcome Message", @"Title for welcome message") andSentBySelf:NO];
-    [self appendLastMessageSentBySelf:NO];
+    [self storeMessage:msg heading:NSLocalizedString(@"Welcome Message", @"Title for welcome message") sentBySelf:NO];
 }
 
 - (void) serverModel:(MLServerModel *)model userMoved:(MLUser *)user toChannel:(MLChannel *)chan fromChannel:(MLChannel *)prevChan byUser:(MLUser *)mover {
@@ -743,9 +773,7 @@
     if (user != nil) {
         heading = [NSString stringWithFormat:NSLocalizedString(@"From %@", @"Message sender title"), [user userName]];
     }
-    [_msgdb addMessage:msg withHeading:heading andSentBySelf:NO];
-    
-    [self appendLastMessageSentBySelf:NO];
+    [self storeMessage:msg heading:heading sentBySelf:NO];
    
     UIApplication *app = [UIApplication sharedApplication];
     if ([app applicationState] == UIApplicationStateBackground) {

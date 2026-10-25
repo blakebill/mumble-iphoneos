@@ -40,8 +40,10 @@
 @end
 
 static NSMutableArray<NSString *> *results;
+void MLVoiceIngressTests(void (^record)(NSString *));
 static NSUInteger engineStarts, startupFailuresRemaining, engineResumes;
 static BOOL legacy;
+static BOOL TestAsynchronousSessionAPI(id object, SEL command) { return !legacy; }
 static AVAudioApplicationRecordPermission permissionValue=AVAudioApplicationRecordPermissionGranted;
 static void (^permissionCompletion)(BOOL);
 static NSUInteger permissionRequests;
@@ -616,6 +618,8 @@ static void SpeakingIndicatorTests(void) {
 static void RunTests(void) {
     results=[NSMutableArray array];
     legacy=getenv("ML_AUDIO_TEST_LEGACY")!=nullptr;
+    Method sessionAPI=class_getInstanceMethod(MLAudio.class,NSSelectorFromString(@"usesAsynchronousSessionAPI"));
+    IMP originalSessionAPI=method_setImplementation(sessionAPI,(IMP)TestAsynchronousSessionAPI);
     Method shared=class_getClassMethod(AVAudioSession.class,@selector(sharedInstance));
     IMP originalShared=method_setImplementation(shared,(IMP)TestSharedSession);
     Method permission=class_getInstanceMethod(object_getClass(AVAudioApplication.sharedInstance),@selector(recordPermission));
@@ -809,10 +813,12 @@ static void RunTests(void) {
         ConnectedInterruptionTests(test);
         CaptureQueueTests();
         SpeakingIndicatorTests();
+        MLVoiceIngressTests(^(NSString *name){Record(name);});
         [results addObject:@"ALL TESTS PASSED"];
     } @catch (NSException *error) {
         [results addObject:[NSString stringWithFormat:@"FAIL %@: %@",error.name,error.reason]];
     } @finally {
+        method_setImplementation(sessionAPI,originalSessionAPI);
         method_setImplementation(shared,originalShared);
         method_setImplementation(permission,originalPermission);
         method_setImplementation(request,originalRequest);

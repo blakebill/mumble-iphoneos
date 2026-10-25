@@ -15,6 +15,8 @@ jobs:
         run: python3 Scripts/check-project-integrity.py
       - name: Test text messages
         run: bash Scripts/test-text-messages.sh
+      - name: Test audio capture buffers
+        run: bash Scripts/test-audio-buffers.sh
       - name: Check translations
         run: python3 Scripts/check-localizations.py
       - name: Install build tools
@@ -36,8 +38,23 @@ jobs:
         run: bash Scripts/build-libmumble.sh
       - name: Build iPhone application
         run: xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO build
-      - name: Build Simulator application
-        run: xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
+      - name: Build isolated Simulator test host
+        run: xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator -derivedDataPath "$RUNNER_TEMP/mumble-simulator" PRODUCT_BUNDLE_IDENTIFIER=com.blakebill.mumble.audio-lifecycle-tests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
+      - name: Prepare Simulator runtime
+        run: |
+          if ! xcrun simctl list runtimes --json | python3 -c 'import json,sys; sys.exit(not any(r.get("isAvailable") and ".iOS-" in r["identifier"] and int(r["version"].split(".")[0]) >= 27 for r in json.load(sys.stdin)["runtimes"]))'; then
+            xcodebuild -downloadPlatform iOS -architectureVariant arm64
+          fi
+      - name: Test audio recovery, server lists, interface and Duo
+        run: bash Scripts/test-simulator.sh "$RUNNER_TEMP/mumble-simulator/Build/Products/Debug-iphonesimulator/Mumble.app" "$RUNNER_TEMP/mumble-reports"
+      - name: Upload Simulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: simulator-checks
+          path: ${{ runner.temp }}/mumble-reports
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save dependency cache
         if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4

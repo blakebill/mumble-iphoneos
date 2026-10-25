@@ -22,11 +22,15 @@
 #import "MUOnboardingViewController.h"
 #import "MUConnectionController.h"
 #import "MUFavouriteServer.h"
+#import "MUWelcomeScreenPhone.h"
 // Keep the UI audit independent of FMDB's private build header map.
 @interface MUDatabase : NSObject
 + (void)storeFavourite:(MUFavouriteServer *)server;
 + (void)deleteFavourite:(MUFavouriteServer *)server;
 + (NSMutableArray *)fetchAllFavourites;
++ (void)recordRecentServerWithHostname:(NSString *)hostname port:(NSUInteger)port displayName:(NSString *)displayName username:(NSString *)username;
++ (NSArray<MUFavouriteServer *> *)recentServers;
++ (void)deleteRecentServer:(MUFavouriteServer *)server;
 @end
 
 
@@ -34,6 +38,10 @@
 - (void)importFromFiles:(id)sender;
 - (void)addButtonClicked:(id)sender;
 - (void)doneButtonClicked:(id)sender;
+- (void)doneClicked:(id)sender;
+- (void)cancelClicked:(id)sender;
+- (void)showQuickConnect:(id)sender;
+- (void)drainPendingUpdates;
 - (void)vadBelowChanged:(UISlider *)sender;
 - (void)vadAboveChanged:(UISlider *)sender;
 + (NSArray *)accessTokensForServerWithHostname:(NSString *)hostname port:(NSInteger)port;
@@ -53,6 +61,7 @@
 - (void)serverModel:(MLServerModel *)model textMessageReceived:(MLTextMessage *)message fromUser:(MLUser *)user;
 @end
 static NSMutableArray *results;
+void MUMessageStoreChecks(UIWindow *window,NSMutableArray<NSString *> *results);
 static void Check(BOOL test, NSString *reason) { if (!test) @throw [NSException exceptionWithName:@"AuditFailure" reason:reason userInfo:nil]; }
 static void Wait(double duration) { NSDate *end=[NSDate dateWithTimeIntervalSinceNow:duration]; while(end.timeIntervalSinceNow>0) [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.005]]; }
 static void NoAudioStart(id self,SEL command) {}
@@ -98,12 +107,15 @@ static void PasswordConnectionChecks(UIWindow *window) {
   Check(alert.actions.count==3 && !alert.actions[1].enabled && !alert.actions[2].enabled,@"Password prompt lacks Cancel/Once/Save or permits empty input");
   UITextField *field=alert.textFields.firstObject;field.text=@"wrong-fixture";[field sendActionsForControlEvents:UIControlEventEditingChanged];Check(alert.actions[1].enabled && alert.actions[2].enabled,@"Entering a password does not enable reconnect actions");
   InvokeAlertAction(alert.actions[2]);Wait(.7);
+  for(MUFavouriteServer *recent in [MUDatabase recentServers])Check([recent.hostName caseInsensitiveCompare:host]!=NSOrderedSame,@"A rejected connection appears in recent history");
   for(MUFavouriteServer *saved in [MUDatabase fetchAllFavourites])if(saved.primaryKey==first.primaryKey)Check(!saved.password.length,@"Unverified password is saved before authentication");
   connection=[controller valueForKey:@"_connection"];[(id)controller connection:connection rejectedWithReason:MLRejectReasonWrongServerPassword explanation:nil];alert=WaitForPasswordPrompt(parent,controller);
   Check([alert.title isEqual:NSLocalizedString(@"Incorrect Password",nil)] && !alert.textFields.firstObject.text.length,@"Rejected password is reused instead of prompting again");
   field=alert.textFields.firstObject;field.text=@"correct-fixture";[field sendActionsForControlEvents:UIControlEventEditingChanged];InvokeAlertAction(alert.actions[2]);Wait(.7);
   MLServerModel *model=[controller valueForKey:@"_serverModel"];MLUser *user=[MLUser new];user.session=1;user.userName=@"First";user.channel=model.rootChannel;[[model.rootChannel valueForKey:@"userStorage"]addObject:user];[model setValue:user forKey:@"_connectedUser"];
   [(id)controller serverModel:model joinedServerAsUser:user];Wait(.8);
+  MUFavouriteServer *joined=[MUDatabase recentServers].firstObject;
+  Check([joined.hostName caseInsensitiveCompare:host]==NSOrderedSame && [joined.displayName isEqual:@"Password audit"] && [joined.userName isEqual:@"First"] && !joined.password,@"Successful connection history loses its name/account or saves a password");
   for(MUFavouriteServer *saved in [MUDatabase fetchAllFavourites]){
    if(saved.primaryKey==first.primaryKey)Check([saved.password isEqual:@"correct-fixture"],@"Successfully verified password does not persist to its favourite");
    if(saved.primaryKey==other.primaryKey)Check([saved.password isEqual:@"unchanged-fixture"],@"Saving password changes another account at the same server");
@@ -121,6 +133,7 @@ static void PasswordConnectionChecks(UIWindow *window) {
  } @finally {
   [controller disconnectFromServer];if(parent.presentedViewController)[parent dismissViewControllerAnimated:NO completion:nil];Wait(.2);window.rootViewController=[UIViewController new];
   for(MUFavouriteServer *saved in [MUDatabase fetchAllFavourites])if([saved.hostName isEqual:host])[MUDatabase deleteFavourite:saved];
+  for(MUFavouriteServer *recent in [MUDatabase recentServers])if([recent.hostName caseInsensitiveCompare:host]==NSOrderedSame)[MUDatabase deleteRecentServer:recent];
   method_setImplementation(connect,original);
  }
 }
@@ -355,8 +368,244 @@ static void MenuChecks(UIWindow *window) {
  UIViewController *blank=[UIViewController new];nav=Show(window,blank);MUNotificationController *notice=[MUNotificationController new];[notice addNotification:@"The server denied this action." fromViewController:blank];Wait(.3);UIAlertController *alert=(id)(nav.presentedViewController ?: blank.presentedViewController);Check([alert isKindOfClass:UIAlertController.class] && alert.preferredStyle==UIAlertControllerStyleAlert && alert.actions.count==1,@"Server notice is still a disappearing custom overlay");[nav dismissViewControllerAnimated:NO completion:nil];Wait(.2);
  [results addObject:@"PASS native unread count/bar controls, Files picker and readable server notice"];
 }
+static NSDictionary *quickConnectionRequest;
+static NSUInteger quickConnectionCount, homeDiscoveryStarts;
+static BOOL quickConnectionPresentedEarly;
+static void CaptureQuickConnection(id object, SEL command, NSString *host, NSUInteger port, NSString *username, NSString *password, UIViewController *parent) {
+ quickConnectionCount++;
+ quickConnectionPresentedEarly=parent.presentedViewController!=nil;
+ quickConnectionRequest=@{@"host":host ?: @"", @"port":@(port), @"username":username ?: @"", @"password":password ?: @""};
+}
+static void CaptureHomeDiscovery(id object, SEL command) { homeDiscoveryStarts++; }
+static MUFavouriteServer *capturedRecentFavourite;
+static void CaptureRecentFavourite(id object, SEL command, MUFavouriteServer *server, UIViewController *parent) { capturedRecentFavourite=server; }
+static void RecentHomeChecks(UIWindow *window) {
+ NSArray *history=[MUDatabase recentServers];
+ NSUInteger favouriteCount=[MUDatabase fetchAllFavourites].count;
+ Method connect=class_getInstanceMethod(MUConnectionController.class,@selector(connectToHostname:port:withUsername:andPassword:withParentViewController:));
+ IMP oldConnect=method_setImplementation(connect,(IMP)CaptureQuickConnection);
+ Method favouriteConnect=class_getInstanceMethod(MUConnectionController.class,@selector(connectToFavouriteServer:withParentViewController:));
+ IMP oldFavouriteConnect=method_setImplementation(favouriteConnect,(IMP)CaptureRecentFavourite);
+ Method discovery=class_getInstanceMethod(NSClassFromString(@"MULanServerListController"),NSSelectorFromString(@"startDiscovery"));
+ IMP oldDiscovery=method_setImplementation(discovery,(IMP)CaptureHomeDiscovery);
+ @try {
+  for(MUFavouriteServer *server in history)[MUDatabase deleteRecentServer:server];
+  [MUDatabase recordRecentServerWithHostname:@"community.example.org" port:65000 displayName:@"Community" username:@"Recent guest"];
+  MUWelcomeScreenPhone *home=[MUWelcomeScreenPhone new];UINavigationController *nav=Show(window,home);Wait(.3);
+  [home setValue:@[] forKey:@"_favouriteServers"];
+  [home.tableView reloadData];[home.view layoutIfNeeded];
+  Check(home.tableView.numberOfSections==3 && [home.tableView numberOfRowsInSection:2]==1,@"History is absent after reopening Home");
+  NSIndexPath *path=[NSIndexPath indexPathForRow:0 inSection:2];quickConnectionCount=0;capturedRecentFavourite=nil;
+  [home.tableView.delegate tableView:home.tableView didSelectRowAtIndexPath:path];
+  Check(quickConnectionCount==1 && [quickConnectionRequest[@"host"]isEqual:@"community.example.org"] && [quickConnectionRequest[@"port"]unsignedIntegerValue]==65000 && [quickConnectionRequest[@"username"]isEqual:@"Recent guest"] && ![quickConnectionRequest[@"password"]length],@"Recent reconnect loses its endpoint/account or invents a password");
+  MUFavouriteServer *favourite=[[MUFavouriteServer alloc]initWithDisplayName:@"Saved community" hostName:@"COMMUNITY.EXAMPLE.ORG" port:65000 userName:@"Saved user" password:@"saved-fixture"];
+  [home setValue:@[favourite] forKey:@"_favouriteServers"];
+  [home.tableView.delegate tableView:home.tableView didSelectRowAtIndexPath:path];
+  Check(capturedRecentFavourite==favourite && quickConnectionCount==1,@"A recent saved server bypasses its favourite credentials");
+  [home setValue:@[] forKey:@"_favouriteServers"];
+  UISwipeActionsConfiguration *swipe=[home.tableView.delegate tableView:home.tableView trailingSwipeActionsConfigurationForRowAtIndexPath:path];
+  Check(swipe.actions.count==1 && swipe.actions.firstObject.style==UIContextualActionStyleDestructive,@"Recent history has no native removal action");
+  __block BOOL removed=NO;UIContextualAction *remove=swipe.actions.firstObject;remove.handler(remove,home.view,^(BOOL success){removed=success;});Wait(.5);
+  Check(removed && [MUDatabase recentServers].count==0 && home.tableView.numberOfSections==2 && [MUDatabase fetchAllFavourites].count==favouriteCount,@"Removing the last recent server leaves a broken section or changes favourites");
+  UITableViewHeaderFooterView *header=[home.tableView headerViewForSection:0];UIButton *manage=nil;
+  for(UIView *view in Subviews(header))if([view isKindOfClass:UIButton.class] && [view.accessibilityLabel isEqual:NSLocalizedString(@"Manage Favourites",nil)])manage=(id)view;
+  Check(manage!=nil && !home.navigationItem.rightBarButtonItem,@"Manage favourites is not attached to its card header");
+  [manage sendActionsForControlEvents:UIControlEventTouchUpInside];Wait(.5);
+  Check([nav.topViewController isKindOfClass:NSClassFromString(@"MUFavouriteServerListController")],@"The favourites header action does not open management");
+  [results addObject:@"PASS recent reconnect, favourite credential reuse, native history removal and the section-level Manage action"];
+ } @finally {
+  window.rootViewController=[UIViewController new];Wait(.1);method_setImplementation(connect,oldConnect);method_setImplementation(favouriteConnect,oldFavouriteConnect);method_setImplementation(discovery,oldDiscovery);capturedRecentFavourite=nil;
+  for(MUFavouriteServer *server in [MUDatabase recentServers])[MUDatabase deleteRecentServer:server];
+  for(MUFavouriteServer *server in history.reverseObjectEnumerator)[MUDatabase recordRecentServerWithHostname:server.hostName port:server.port displayName:server.displayName username:server.userName];
+ }
+}
+static void RecentServerChecks(void) {
+ NSArray *original=[MUDatabase recentServers];
+ @try {
+  for(MUFavouriteServer *server in original)[MUDatabase deleteRecentServer:server];
+  for(NSString *host in @[@"a.history.invalid",@"b.history.invalid",@"c.history.invalid",@"d.history.invalid"])[MUDatabase recordRecentServerWithHostname:host port:64738 displayName:host username:@"Audit"];
+  NSArray<MUFavouriteServer *> *recent=[MUDatabase recentServers];
+  Check(recent.count==3 && [recent[0].hostName isEqual:@"d.history.invalid"] && [recent[2].hostName isEqual:@"b.history.invalid"],@"Recent connections are not bounded or ordered by last connection");
+  [MUDatabase recordRecentServerWithHostname:@"B.HISTORY.INVALID" port:64738 displayName:@"Updated name" username:@"Other account"];
+  recent=[MUDatabase recentServers];
+  Check(recent.count==3 && [recent[0].hostName isEqual:@"b.history.invalid"] && [recent[0].displayName isEqual:@"Updated name"] && [recent[0].userName isEqual:@"Other account"],@"Reconnecting duplicates a server or loses its latest account/name");
+  for(MUFavouriteServer *server in recent)Check(!server.password && !server.hasPrimaryKey,@"History contains passwords or masquerades as a saved favourite");
+  [MUDatabase recordRecentServerWithHostname:@" " port:64738 displayName:nil username:nil];
+  [MUDatabase recordRecentServerWithHostname:@"invalid.history.invalid" port:65536 displayName:nil username:nil];
+  [MUDatabase recordRecentServerWithHostname:@"invalid.history.invalid" port:0 displayName:nil username:nil];
+  Check([MUDatabase recentServers].count==3 && [[MUDatabase recentServers][0].hostName isEqual:@"b.history.invalid"],@"Invalid history endpoint changes the recent list");
+  [MUDatabase recordRecentServerWithHostname:@"b.history.invalid" port:65000 displayName:nil username:nil];
+  recent=[MUDatabase recentServers];Check(recent.count==3 && recent[0].port==65000 && recent[1].port==64738,@"History merges different ports at the same host");
+  [MUDatabase deleteRecentServer:recent[0]];recent=[MUDatabase recentServers];
+  Check(recent.count==2 && recent[0].port==64738,@"Removing a recent server removes another endpoint");
+  [results addObject:@"PASS recent connection ordering, three-server limit, endpoint deduplication, account updates, deletion and password-free storage"];
+ } @finally {
+  for(MUFavouriteServer *server in [MUDatabase recentServers])[MUDatabase deleteRecentServer:server];
+  for(MUFavouriteServer *server in original.reverseObjectEnumerator)[MUDatabase recordRecentServerWithHostname:server.hostName port:server.port displayName:server.displayName username:server.userName];
+ }
+}
+static __weak UIScrollView *homeDraggingScroll;
+static IMP originalHomeDragging;
+static BOOL AuditHomeDragging(id object, SEL command) {
+ return object==homeDraggingScroll || ((BOOL (*)(id,SEL))originalHomeDragging)(object,command);
+}
+static void CheckHomeScrollViewport(MUWelcomeScreenPhone *home, UITableView *table) {
+ [table layoutIfNeeded];
+ NSIndexPath *last=[NSIndexPath indexPathForRow:[table numberOfRowsInSection:table.numberOfSections-1]-1 inSection:table.numberOfSections-1];
+ [table scrollToRowAtIndexPath:last atScrollPosition:UITableViewScrollPositionBottom animated:NO];[table layoutIfNeeded];
+ CGRect viewport=[table convertRect:table.bounds toView:home.view];
+ CGFloat bottom=MAX(0,table.contentSize.height-table.bounds.size.height);
+ for(NSNumber *offset in @[@0,@(bottom),@(bottom+32),@(bottom),@0,@-80,@0]) {
+  [table setContentOffset:CGPointMake(0,offset.doubleValue) animated:NO];
+  [home.view setNeedsLayout];[home.view layoutIfNeeded];Wait(.05);
+  CGRect actual=[table convertRect:table.bounds toView:home.view];
+  BOOL stable=fabs(actual.origin.x-viewport.origin.x)<.5 && fabs(actual.origin.y-viewport.origin.y)<.5 && fabs(actual.size.width-viewport.size.width)<.5 && fabs(actual.size.height-viewport.size.height)<.5;
+  Check(stable && table.visibleCells.count>0,[NSString stringWithFormat:@"Home scroll %@: viewport %@ -> %@, content %@, offset %@, visible %lu",offset,NSStringFromCGRect(viewport),NSStringFromCGRect(actual),NSStringFromCGSize(table.contentSize),NSStringFromCGPoint(table.contentOffset),(unsigned long)table.visibleCells.count]);
+  for(UITableViewCell *cell in table.visibleCells) Check(!cell.hidden && cell.alpha==1 && cell.bounds.size.height>0,@"Home scroll hides a visible server cell");
+ }
+}
+static void HomeScrollChecks(UIWindow *window) {
+ Method discovery=class_getInstanceMethod(NSClassFromString(@"MULanServerListController"),NSSelectorFromString(@"startDiscovery"));
+ IMP oldDiscovery=method_setImplementation(discovery,(IMP)CaptureHomeDiscovery);
+ Method dragging=class_getInstanceMethod(UITableView.class,@selector(isDragging));
+ originalHomeDragging=method_setImplementation(dragging,(IMP)AuditHomeDragging);
+ @try {
+  MUWelcomeScreenPhone *home=[MUWelcomeScreenPhone new];
+  UINavigationController *navigation=[[UINavigationController alloc]initWithRootViewController:home];
+  navigation.navigationBar.prefersLargeTitles=YES;
+  UITabBarController *tabs=[UITabBarController new];
+  navigation.tabBarItem=[[UITabBarItem alloc]initWithTitle:NSLocalizedString(@"Home",nil) image:[UIImage systemImageNamed:@"house"] tag:0];
+  UIViewController *settings=[UIViewController new];settings.tabBarItem=[[UITabBarItem alloc]initWithTitle:NSLocalizedString(@"Settings",nil) image:[UIImage systemImageNamed:@"gearshape"] tag:1];
+  tabs.viewControllers=@[navigation,settings];window.rootViewController=tabs;[window makeKeyAndVisible];Wait(.5);
+  MUFavouriteServer *favourite=[[MUFavouriteServer alloc]initWithDisplayName:@"Favourite server" hostName:@"home-audit.invalid" port:64738 userName:@"Audit" password:nil];
+  NSNetService *lan=[[NSNetService alloc]initWithDomain:@"local." type:@"_mumble._tcp." name:@"LAN server" port:64738];
+  [home setValue:@[favourite] forKey:@"_favouriteServers"];
+  [home setValue:@[lan] forKey:@"_lanServices"];
+  [home setValue:@[] forKey:@"_recentServers"];
+  [home.tableView reloadData];[home.view layoutIfNeeded];Wait(.2);
+  CheckHomeScrollViewport(home,home.tableView);
+  Save(window,@"home-scroll-audit.png");
+  MUFavouriteServer *recent=[[MUFavouriteServer alloc]initWithDisplayName:@"Community" hostName:@"community.example.org" port:64738 userName:@"Guest" password:nil];
+  MUFavouriteServer *second=[[MUFavouriteServer alloc]initWithDisplayName:@"Voice Chat" hostName:@"voice.example.net" port:64738 userName:@"Guest" password:nil];
+  [home setValue:@[recent,second] forKey:@"_recentServers"];[home.tableView reloadData];[home.view layoutIfNeeded];Wait(.2);
+  Check(home.tableView.style==UITableViewStyleInsetGrouped && home.tableView.numberOfSections==3 && [home.tableView numberOfRowsInSection:2]==2,@"Recent connections are not an independent native card group");
+  UIUserInterfaceStyle previousStyle=window.overrideUserInterfaceStyle;
+  window.overrideUserInterfaceStyle=UIUserInterfaceStyleLight;Wait(.2);Save(window,@"home-cards-light.png");
+  window.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;Wait(.2);Save(window,@"home-cards-dark.png");window.overrideUserInterfaceStyle=previousStyle;
+  [home setValue:@[] forKey:@"_recentServers"];[home.tableView reloadData];[home.view layoutIfNeeded];
+  NSMutableArray *many=[NSMutableArray array];for(int i=0;i<30;i++)[many addObject:favourite];
+  [home setValue:many forKey:@"_favouriteServers"];[home.tableView reloadData];[home.view layoutIfNeeded];
+  CheckHomeScrollViewport(home,home.tableView);
+  [home.tableView scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:29 inSection:0] atScrollPosition:UITableViewScrollPositionBottom animated:NO];
+  homeDraggingScroll=home.tableView;
+  Check(home.tableView.isDragging,@"Home scroll fixture did not enter the dragging state");
+  [home setValue:@[favourite] forKey:@"_pendingFavourites"];[(id)home drainPendingUpdates];
+  Check([[home valueForKey:@"_favouriteServers"]count]==30 && [home valueForKey:@"_pendingFavourites"]!=nil,@"Home replaces its rows while a bottom-edge gesture is active");
+  homeDraggingScroll=nil;
+  [(id<UIScrollViewDelegate>)home scrollViewDidEndDragging:home.tableView willDecelerate:NO];[home.view layoutIfNeeded];Wait(.1);
+  Check([[home valueForKey:@"_favouriteServers"]count]==1 && [home valueForKey:@"_pendingFavourites"]==nil && home.tableView.visibleCells.count>0,@"Home does not restore a visible short list after a deferred refresh");
+  // Exercise the same resize path used by a Duo opening or rotating without
+  // relying on the currently selected Simulator posture.
+  UIViewController *host=[UIViewController new];
+  MUWelcomeScreenPhone *resizable=[MUWelcomeScreenPhone new];
+  window.rootViewController=host;[host addChildViewController:resizable];
+  resizable.view.translatesAutoresizingMaskIntoConstraints=NO;[host.view addSubview:resizable.view];
+  NSLayoutConstraint *width=[resizable.view.widthAnchor constraintEqualToConstant:900];
+  [NSLayoutConstraint activateConstraints:@[[resizable.view.leadingAnchor constraintEqualToAnchor:host.view.leadingAnchor],[resizable.view.topAnchor constraintEqualToAnchor:host.view.topAnchor],[resizable.view.bottomAnchor constraintEqualToAnchor:host.view.bottomAnchor],width]];
+  [resizable didMoveToParentViewController:host];Wait(.4);
+  [resizable setValue:@[favourite] forKey:@"_favouriteServers"];
+  [resizable setValue:@[lan] forKey:@"_lanServices"];
+  [resizable setValue:@[recent,second] forKey:@"_recentServers"];
+  UITableView *lanTable=[resizable valueForKey:@"_lanTable"];
+  for(NSNumber *size in @[@900,@402,@900,@402]) {
+   width.constant=size.doubleValue;[host.view setNeedsLayout];[host.view layoutIfNeeded];Wait(.1);
+   [resizable.tableView reloadData];[lanTable reloadData];[resizable.view layoutIfNeeded];
+   BOOL split=size.doubleValue>=700;
+   Check(lanTable.hidden!=split && resizable.tableView.numberOfSections==(split ? 1 : 3) && lanTable.numberOfSections==2,@"Home resize loses its single/dual-column server grouping");
+   CheckHomeScrollViewport(resizable,resizable.tableView);
+   if(split)CheckHomeScrollViewport(resizable,lanTable);
+  }
+  resizable.traitOverrides.preferredContentSizeCategory=UIContentSizeCategoryAccessibilityExtraExtraLarge;
+  [host.view setNeedsLayout];[host.view layoutIfNeeded];Wait(.2);
+  UIStackView *actions=[resizable valueForKey:@"_actions"];
+  Check(actions.axis==UILayoutConstraintAxisVertical,@"Home shortcuts do not stack at accessibility text sizes");
+  CGRect controls=[actions convertRect:actions.bounds toView:resizable.view];
+  CGRect list=[resizable.tableView convertRect:resizable.tableView.bounds toView:resizable.view];
+  Check(CGRectGetMaxY(controls)<=CGRectGetMinY(list)-7 && list.size.height>80,@"Large-text Home shortcuts cover the server list");
+  Save(window,@"home-cards-accessibility.png");
+  [results addObject:@"PASS populated Home overscroll, deferred refresh, long lists and repeated single/dual-column resizing"];
+ } @finally { homeDraggingScroll=nil;method_setImplementation(dragging,originalHomeDragging);window.rootViewController=[UIViewController new];Wait(.1);method_setImplementation(discovery,oldDiscovery); }
+}
+static void QuickConnectHomeChecks(UIWindow *window) {
+ Method connect=class_getInstanceMethod(MUConnectionController.class,@selector(connectToHostname:port:withUsername:andPassword:withParentViewController:));
+ IMP oldConnect=method_setImplementation(connect,(IMP)CaptureQuickConnection);
+ Method discovery=class_getInstanceMethod(NSClassFromString(@"MULanServerListController"),NSSelectorFromString(@"startDiscovery"));
+ IMP oldDiscovery=method_setImplementation(discovery,(IMP)CaptureHomeDiscovery);
+ id oldUsername=[NSUserDefaults.standardUserDefaults objectForKey:@"DefaultUserName"];
+ NSUInteger favourites=[MUDatabase fetchAllFavourites].count;
+ quickConnectionCount=0;homeDiscoveryStarts=0;quickConnectionRequest=nil;
+ @try {
+  [NSUserDefaults.standardUserDefaults setObject:@"Default quick user" forKey:@"DefaultUserName"];
+  MUWelcomeScreenPhone *home=[MUWelcomeScreenPhone new];Show(window,home);Wait(.3);
+  [home setValue:@[] forKey:@"_recentServers"];[home.tableView reloadData];
+  BOOL split = home.view.bounds.size.width >= 700;
+  Check(home.tableView.numberOfSections==(split ? 1 : 2) && homeDiscoveryStarts>0,@"Home lists contain an extra public-server subsection");
+  UITableView *lanTable=[home valueForKey:@"_lanTable"];
+  Check(lanTable.numberOfSections==1,@"Public servers remain nested in the LAN column");
+  UIButton *publicButton=nil,*quickButton=nil;
+  for(UIView *view in Subviews(home.view)) if([view isKindOfClass:UIButton.class]) {
+   UIButton *button=(id)view;
+   if([button.configuration.title isEqual:NSLocalizedString(@"Public Servers",nil)]) publicButton=button;
+   if([button.configuration.title isEqual:NSLocalizedString(@"Quick Connect",nil)]) quickButton=button;
+  }
+  Check(publicButton && quickButton && publicButton.superview==quickButton.superview,@"Public servers are not a peer of the top-level quick-connect action");
+  [publicButton sendActionsForControlEvents:UIControlEventTouchUpInside];Wait(.6);
+  UINavigationController *homeNavigation=home.navigationController;
+  Check([homeNavigation.topViewController isKindOfClass:NSClassFromString(@"MUPublicServerListController")] && homeNavigation.viewControllers.count==2,@"Public servers do not open the directory directly from Home");
+  [homeNavigation popViewControllerAnimated:NO];Wait(.2);
+  CGRect publicFrame=[publicButton convertRect:publicButton.bounds toView:home.view];
+  CGRect quickFrame=[quickButton convertRect:quickButton.bounds toView:home.view];
+  CGRect listFrame=[home.tableView convertRect:home.tableView.bounds toView:home.view];
+  [results addObject:[NSString stringWithFormat:@"Home action frames: quick %@, public %@, list %@",NSStringFromCGRect(quickFrame),NSStringFromCGRect(publicFrame),NSStringFromCGRect(listFrame)]];
+  Check(publicFrame.size.height>=44 && quickFrame.size.height>=44 && CGRectGetMaxY(publicFrame)<=CGRectGetMinY(listFrame)-7 && CGRectGetMaxY(quickFrame)<=CGRectGetMinY(listFrame)-7,@"Top-level server actions overlap the list or lose their touch targets");
+  Save(window,@"native-home-audit.png");
+  NSIndexPath *quick=[NSIndexPath indexPathForRow:0 inSection:0];
+  [(id)home showQuickConnect:nil];WaitForSheet(home);
+  MUFavouriteServerEditViewController *form=(id)[(UINavigationController *)home.presentedViewController topViewController];
+  Check([form isKindOfClass:MUFavouriteServerEditViewController.class] && [form.tableView numberOfRowsInSection:0]==4,@"Quick connect does not use the native four-field connection form");
+  UITextField *address=[form valueForKey:@"_addressField"],*port=[form valueForKey:@"_portField"],*password=[form valueForKey:@"_passwordField"];
+  Check([form.tableView cellForRowAtIndexPath:quick]==[form valueForKey:@"_addressCell"] && password.secureTextEntry && !form.navigationItem.rightBarButtonItem.enabled,@"Quick connect exposes a description field, plaintext password or an empty address");
+  address.text=@"  \n ";[address sendActionsForControlEvents:UIControlEventEditingChanged];[(id)form doneClicked:nil];
+  Check(!form.navigationItem.rightBarButtonItem.enabled && quickConnectionCount==0,@"Quick connect accepts a whitespace-only address");
+  address.text=@"  quick-connect-audit.invalid  ";[address sendActionsForControlEvents:UIControlEventEditingChanged];
+  for(NSString *invalid in @[@"0",@"65536",@"-1",@"12x",@"1.5",@"99999999999"]) {
+   port.text=invalid;[port sendActionsForControlEvents:UIControlEventEditingChanged];[(id)form doneClicked:nil];
+   Check(!form.navigationItem.rightBarButtonItem.enabled && quickConnectionCount==0 && home.presentedViewController!=nil,@"Quick connect accepts an invalid port");
+  }
+  for(NSString *valid in @[@"1",@"65535",@""]) { port.text=valid;[port sendActionsForControlEvents:UIControlEventEditingChanged];Check(form.navigationItem.rightBarButtonItem.enabled,@"Quick connect rejects a valid/default port"); }
+  password.text=@"  quick password  ";Save(window,@"quick-connect-audit.png");
+  [(id)form doneClicked:nil];Wait(.8);
+  Check(quickConnectionCount==1 && !quickConnectionPresentedEarly && [quickConnectionRequest[@"host"]isEqual:@"quick-connect-audit.invalid"] && [quickConnectionRequest[@"port"]unsignedIntegerValue]==64738 && [quickConnectionRequest[@"username"]isEqual:@"Default quick user"] && [quickConnectionRequest[@"password"]isEqual:@"  quick password  "],@"Quick connect loses parameters, trims the password, duplicates attempts or starts before dismissal");
+  Check([MUDatabase fetchAllFavourites].count==favourites,@"Quick connect saves an unwanted favourite");
+  [(id)home showQuickConnect:nil];WaitForSheet(home);
+  form=(id)[(UINavigationController *)home.presentedViewController topViewController];
+  address=[form valueForKey:@"_addressField"];port=[form valueForKey:@"_portField"];UITextField *username=[form valueForKey:@"_usernameField"];
+  address.text=@"2001:db8::1";port.text=@" 65000 ";username.text=@" guest ";[address sendActionsForControlEvents:UIControlEventEditingChanged];[port sendActionsForControlEvents:UIControlEventEditingChanged];
+  [(id)form doneClicked:nil];Wait(.8);
+  Check(quickConnectionCount==2 && [quickConnectionRequest[@"host"]isEqual:@"2001:db8::1"] && [quickConnectionRequest[@"port"]unsignedIntegerValue]==65000 && [quickConnectionRequest[@"username"]isEqual:@"guest"] && ![quickConnectionRequest[@"password"]length],@"Quick connect loses an IPv6 address, custom port, username or optional password");
+  [(id)home showQuickConnect:nil];WaitForSheet(home);
+  form=(id)[(UINavigationController *)home.presentedViewController topViewController];[(id)form cancelClicked:nil];Wait(.7);
+  Check(quickConnectionCount==2 && [MUDatabase fetchAllFavourites].count==favourites,@"Cancelling quick connect starts a connection or saves a favourite");
+  [results addObject:@"PASS native Quick Connect form, validation, defaults, dismissal ordering, no favourite writes, cancellation and a full-height home"];
+ } @finally {
+  window.rootViewController=[UIViewController new];Wait(.1);
+  method_setImplementation(connect,oldConnect);method_setImplementation(discovery,oldDiscovery);
+  if(oldUsername)[NSUserDefaults.standardUserDefaults setObject:oldUsername forKey:@"DefaultUserName"];else[NSUserDefaults.standardUserDefaults removeObjectForKey:@"DefaultUserName"];
+  quickConnectionRequest=nil;
+ }
+}
 static void PreviewAndHomeChecks(UIWindow *window) {
- UIViewController *home=[NSClassFromString(@"MUWelcomeScreenPhone")new];Show(window,home);Save(window,@"native-home-audit.png");
+ RecentHomeChecks(window);HomeScrollChecks(window);QuickConnectHomeChecks(window);
  UIImage *image=[[[UIGraphicsImageRenderer alloc]initWithSize:CGSizeMake(600,340)]imageWithActions:^(UIGraphicsImageRendererContext *context){[UIColor.systemTealColor setFill];UIRectFill(CGRectMake(0,0,600,340));}];
  MUImageViewController *viewer=[[MUImageViewController alloc]initWithImages:@[image]];Show(window,viewer);NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:8];while([viewer.dataSource numberOfPreviewItemsInPreviewController:viewer]!=1 && deadline.timeIntervalSinceNow>0)Wait(.05);Check([viewer.dataSource numberOfPreviewItemsInPreviewController:viewer]==1,@"Native preview did not finish preparing");Wait(1);Save(window,@"native-quicklook-audit.png");
  [results addObject:@"PASS native Home and Quick Look screenshots"];
@@ -485,7 +734,7 @@ static void Run(void) {
   Check(NSBundle.mainBundle.localizations.count>=12,@"The installed app does not expose all twelve languages");
   [results addObject:[NSString stringWithFormat:@"PASS Foundation selected app language %@; Home = %@",language,NSLocalizedString(@"Home",nil)]];
  }
- @try{UIWindowScene *scene=(id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;UIWindow *window=[(id)scene.delegate valueForKey:@"window"];PublicServerModelChecks();PasswordConnectionChecks(window);SetupAndCertificateChecks(window);CertificateNavigationChecks(window);TransmissionChecks(window);TokenAndDetectionChecks(window);FormChecks(window);NativeChecks(window);SearchChecks(window);MenuChecks(window);CrowdedServerSnapshots(window);PreviewAndHomeChecks(window);[results addObject:@"ALL INTERFACE AUDIT CHECKS PASSED"];}@catch(NSException *error){[results addObject:[NSString stringWithFormat:@"FAIL %@",error.reason]];}@finally{method_setImplementation(start,previous);[MLAudio.sharedAudio stop];}
+ @try{RecentServerChecks();UIWindowScene *scene=(id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;UIWindow *window=[(id)scene.delegate valueForKey:@"window"];if([NSProcessInfo.processInfo.environment[@"MU_UI_TEST_HOME_ONLY"]boolValue]){RecentHomeChecks(window);HomeScrollChecks(window);QuickConnectHomeChecks(window);}else{MUMessageStoreChecks(window,results);PublicServerModelChecks();PasswordConnectionChecks(window);SetupAndCertificateChecks(window);CertificateNavigationChecks(window);TransmissionChecks(window);TokenAndDetectionChecks(window);FormChecks(window);NativeChecks(window);SearchChecks(window);MenuChecks(window);CrowdedServerSnapshots(window);PreviewAndHomeChecks(window);}[results addObject:@"ALL INTERFACE AUDIT CHECKS PASSED"];}@catch(NSException *error){[results addObject:[NSString stringWithFormat:@"FAIL %@",error.reason]];}@finally{method_setImplementation(start,previous);[MLAudio.sharedAudio stop];}
  [[results componentsJoinedByString:@"\n"]writeToFile:[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"composer-ui-results.txt"]atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 __attribute__((constructor))static void Schedule(void){dispatch_async(dispatch_get_main_queue(),^{[NSTimer scheduledTimerWithTimeInterval:1 repeats:NO block:^(NSTimer *timer){Run();}];});}

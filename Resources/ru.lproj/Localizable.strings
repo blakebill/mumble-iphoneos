@@ -60,7 +60,6 @@
 "Choose how to speak" = "Выберите способ передачи голоса";
 "Clear Messages" = "Очистить сообщения";
 "Client/server version mismatch" = "Версии клиента и сервера несовместимы";
-"Collapsed" = "Свёрнуто";
 "Common Name" = "Общее имя";
 "Configuration" = "Настройки";
 "Connect" = "Подключиться";
@@ -92,7 +91,6 @@
 "Enter the password for this user, or check your certificate." = "Введите пароль этого пользователя или проверьте сертификат.";
 "Enter the server password to connect to %@." = "Введите пароль сервера для подключения к %@.";
 "Europe" = "Европа";
-"Expanded" = "Развёрнуто";
 "Expired" = "Срок истёк";
 "Expires on %@" = "Действует до %@";
 "Export" = "Экспортировать";
@@ -228,7 +226,6 @@
 "Settings" = "Настройки";
 "Setup progress" = "Ход настройки";
 "Shouting" = "Кричит";
-"Show All" = "Показать всё";
 "Show All Certificates" = "Показать все сертификаты";
 "Show Certificates" = "Показать сертификаты";
 "Show Identities Only" = "Показать только личности";
@@ -297,3 +294,10 @@
 "Your certificate" = "Ваш сертификат";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS управляет эхоподавлением, шумоподавлением и уровнем микрофона. Режим микрофона можно выбрать до подключения. Доступность зависит от устройства и аудиомаршрута.";
 "—" = "—";
+"Quick Connect" = "Быстрое подключение";
+
+/* Home connections */
+"Manage" = "Управлять";
+"Connect directly" = "Прямое подключение";
+"Browse servers" = "Обзор серверов";
+"Recent" = "Недавние подключения";

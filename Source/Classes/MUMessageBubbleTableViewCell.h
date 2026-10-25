@@ -17,6 +17,7 @@
 - (void) setHeading:(NSString *)heading;
 - (void) setMessage:(NSString *)msg;
 - (void) setShownImages:(NSArray *)shownImages;
+- (void)setShownImageSizes:(NSArray<NSValue *> *)sizes;
 - (void) setFooter:(NSString *)footer;
 - (void) setDate:(NSDate *)date;
 - (void) setRightSide:(BOOL)rightSide;

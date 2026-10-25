@@ -24,11 +24,17 @@ inline mumble::BufViewConst MLBytes(NSData *data) {
 - (void)reset;
 - (void)setTalkState:(MLTalkState)state forSession:(NSUInteger)session;
 - (void)receivedVoiceForSession:(NSUInteger)session talkState:(MLTalkState)state hasAudio:(BOOL)hasAudio terminator:(BOOL)terminator;
+- (void)userLocalMuteChanged:(MLUser *)user;
 @end
 @interface MLAudio (Internal)
 - (void)receiveOpus:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator;
+- (void)receiveOpus:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator fromConnection:(MLConnection *)connection;
+- (void)setUserLocalMuted:(BOOL)muted session:(NSUInteger)session connection:(MLConnection *)connection;
 - (void)setLocalMuted:(BOOL)muted deafened:(BOOL)deafened;
 - (void)setBandwidthLimit:(uint32_t)bandwidth;
+@end
+@interface MLUser ()
+@property(nonatomic,weak) MLServerModel *audioModel;
 @end
 @interface MLChannel ()
 @property(nonatomic,strong) NSMutableArray<MLChannel *> *childStorage, *linkStorage;

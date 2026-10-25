@@ -10,7 +10,6 @@
 @interface MUDatabase : NSObject
 
 + (void) initializeDatabase;
-+ (void) teardown;
 
 // FavouriteServer
 + (void) storeFavourite:(MUFavouriteServer *)favServ;
@@ -18,6 +17,11 @@
 + (void) deleteFavourite:(MUFavouriteServer *)favServ;
 + (void) storeFavourites:(NSArray *)favourites;
 + (NSMutableArray *) fetchAllFavourites;
+
+// Successful connections, newest first. History never contains passwords.
++ (void)recordRecentServerWithHostname:(NSString *)hostname port:(NSUInteger)port displayName:(NSString *)displayName username:(NSString *)username;
++ (NSArray<MUFavouriteServer *> *)recentServers;
++ (void)deleteRecentServer:(MUFavouriteServer *)server;
 
 // Cert verification
 + (void) storeDigest:(NSString *)hash forServerWithHostname:(NSString *)hostname port:(NSInteger)port;

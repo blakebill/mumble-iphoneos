@@ -9,9 +9,11 @@
 #include <atomic>
 #include <array>
 #include <cmath>
+#include <unordered_map>
 #include "MLCaptureBufferQueue.hpp"
 
 NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
+struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
 
 @interface MLPlayback : NSObject {
 @public
@@ -49,6 +51,11 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
     dispatch_queue_t _queue, _sessionQueue;
     NSMutableDictionary<NSNumber *,MLPlayback *> *_players;
     __weak MLConnection *_connection;
+    __weak MLConnection *_playbackConnection;
+    std::mutex _playbackRoutingMutex;
+    std::unordered_map<NSUInteger, MLUserPlaybackState> _userPlaybackStates;
+    uint64_t _playbackConnectionRevision, _userPlaybackRevision;
+    std::atomic_size_t _queuedPlaybackPackets;
     std::unique_ptr<mumble::Opus::Encoder> _encoder;
     SpeexPreprocessState *_preprocessor;
     std::vector<int16_t> _pending;
@@ -87,6 +94,7 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         _queue=dispatch_queue_create("info.mumble.libmumble.audio",dispatch_queue_attr_make_with_autorelease_frequency(DISPATCH_QUEUE_SERIAL,DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM));
         _sessionQueue=dispatch_queue_create("info.mumble.libmumble.audio-session",DISPATCH_QUEUE_SERIAL);
         _players=[NSMutableDictionary dictionary];
+        _playbackConnectionRevision=0; _userPlaybackRevision=0; _queuedPlaybackPackets=0;
         _settings={}; _settings.quality=40000; _settings.audioPerPacket=2;
         _settings.volume=1; _settings.micBoost=1; _settings.vadMin=.65; _settings.vadMax=.75;
         _settings.noiseSuppression=-42; _settings.amplification=20; _peak=-96;
@@ -106,6 +114,12 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
     return self;
 }
 - (BOOL)isRunning { return _running && _engine.isRunning; }
+- (BOOL)usesAsynchronousSessionAPI {
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
+    if (@available(iOS 27.0, *)) return YES;
+#endif
+    return NO;
+}
 - (BOOL)forceTransmit { return _forced; }
 - (void)setForceTransmit:(BOOL)value {
     BOOL wasForced=_forced.exchange(value); [self updateCaptureDemand];
@@ -192,11 +206,29 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
 - (void)setBandwidthLimit:(uint32_t)bandwidth { _bandwidthLimit=bandwidth; }
 - (void)setMainConnectionForAudio:(MLConnection *)connection {
     if (connection) _meterOwnsCapture=false;
+    std::lock_guard guard(_playbackRoutingMutex);
+    _playbackConnection=connection; ++_playbackConnectionRevision;
+    _userPlaybackStates.clear();
     dispatch_async(_queue, ^{ self->_connection=connection; self->_pending.clear(); self->_sequence=0; self->_transmitting=NO; self->_forced=false;
         if (self->_engine) self->_engine.mainMixerNode.outputVolume=self.settings.volume;
         for (MLPlayback *playback in self->_players.allValues) { [playback.player stop]; [self->_engine detachNode:playback.player]; }
         [self->_players removeAllObjects];
         [self updateCaptureDemand];
+    });
+}
+- (void)setUserLocalMuted:(BOOL)muted session:(NSUInteger)session connection:(MLConnection *)connection {
+    std::lock_guard guard(_playbackRoutingMutex);
+    if (!connection || connection!=_playbackConnection) return;
+    auto found=_userPlaybackStates.find(session);
+    if (found!=_userPlaybackStates.end() && found->second.muted==muted) return;
+    _userPlaybackStates[session]={muted,++_userPlaybackRevision};
+    if (!muted) return;
+    uint64_t revision=_playbackConnectionRevision;
+    dispatch_async(_queue, ^{
+        { std::lock_guard guard(self->_playbackRoutingMutex);
+          if (revision!=self->_playbackConnectionRevision) return; }
+        MLPlayback *playback=self->_players[@(session)];
+        if (playback) { [playback.player stop]; [self->_engine detachNode:playback.player]; [self->_players removeObjectForKey:@(session)]; }
     });
 }
 - (void)start {
@@ -236,10 +268,12 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         // The older SDK used by CI and iOS 18–26 use the same serialized background fallback.
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
         if (@available(iOS 27.0, *)) {
+          if ([self usesAsynchronousSessionAPI]) {
             [session activateWithOptions:AVAudioSessionActivationOptionNone completionHandler:^(BOOL active, NSError *activationError) {
                 [self completeActivation:active error:activationError generation:generation settings:settings];
             }];
             return;
+          }
         }
 #endif
         BOOL active=[session setActive:YES error:&error];
@@ -276,8 +310,10 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         AVAudioSession *session=AVAudioSession.sharedInstance;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
         if (@available(iOS 27.0, *)) {
+          if ([self usesAsynchronousSessionAPI]) {
             [session deactivateWithOptions:AVAudioSessionDeactivationOptionNotifyOthersOnDeactivation completionHandler:completed];
             return;
+          }
         }
 #endif
         NSError *error=nil;
@@ -703,10 +739,35 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
     if (consumed) _pending.erase(_pending.begin(),_pending.begin()+(long)consumed);
 }
 - (void)receiveOpus:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator {
-    // The model is only accessed on the main thread; decoding is confined to the audio queue.
-    if (_localDeafened || [_connection.model userWithSession:session].isLocalMuted) return;
+    MLConnection *connection;
+    { std::lock_guard guard(_playbackRoutingMutex); connection=_playbackConnection; }
+    [self receiveOpus:data session:session sequence:sequence terminator:terminator fromConnection:connection];
+}
+- (void)receiveOpus:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator fromConnection:(MLConnection *)connection {
+    if (!connection || !_running || _localDeafened) return;
+    uint64_t connectionRevision, userRevision;
+    { std::lock_guard guard(_playbackRoutingMutex);
+      if (connection!=_playbackConnection) return;
+      auto user=_userPlaybackStates.find(session);
+      if (user!=_userPlaybackStates.end() && user->second.muted) return;
+      userRevision=user==_userPlaybackStates.end()?0:user->second.revision;
+      connectionRevision=_playbackConnectionRevision; }
+    // Bound pending encoded data even if DSP is busy; discard old frames instead
+    // of allowing transport bursts to turn into seconds of playback latency.
+    if (_queuedPlaybackPackets.fetch_add(1)>=128) { --_queuedPlaybackPackets; return; }
+    size_t generation=_generation;
+    NSTimeInterval receivedAt=NSProcessInfo.processInfo.systemUptime;
     dispatch_async(_queue, ^{
-        if (!self->_running || self->_localDeafened) return;
+        --self->_queuedPlaybackPackets;
+        if (!self->_running || self->_localDeafened || generation!=self->_generation || NSProcessInfo.processInfo.systemUptime-receivedAt>.25) return;
+        { std::lock_guard guard(self->_playbackRoutingMutex);
+          auto user=self->_userPlaybackStates.find(session);
+          uint64_t current=user==self->_userPlaybackStates.end()?0:user->second.revision;
+          if (connectionRevision!=self->_playbackConnectionRevision || connection!=self->_playbackConnection || current!=userRevision || (user!=self->_userPlaybackStates.end() && user->second.muted)) return; }
+        [self playOpusFrame:data session:session sequence:sequence terminator:terminator];
+    });
+}
+- (void)playOpusFrame:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator {
         MLPlayback *playback=self->_players[@(session)];
         if (!playback && data.length) {
             playback=[MLPlayback new]; playback.player=[AVAudioPlayerNode new]; playback.lastPacket=NSProcessInfo.processInfo.systemUptime;
@@ -737,7 +798,6 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         playback->nextSequence=sequence+buffer.frameLength/480;
         double duration=buffer.frameLength/48000.0; playback->queuedSeconds+=duration;
         [self scheduleBuffer:buffer forPlayback:playback duration:duration];
-    });
 }
 - (void)scheduleBuffer:(AVAudioPCMBuffer *)buffer forPlayback:(MLPlayback *)playback duration:(double)duration {
     NSUInteger generation=playback->generation;

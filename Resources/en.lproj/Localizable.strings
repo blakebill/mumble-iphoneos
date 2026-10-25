@@ -60,7 +60,6 @@
 "Choose how to speak" = "Choose how to speak";
 "Clear Messages" = "Clear Messages";
 "Client/server version mismatch" = "Client/server version mismatch";
-"Collapsed" = "Collapsed";
 "Common Name" = "Common Name";
 "Configuration" = "Configuration";
 "Connect" = "Connect";
@@ -92,7 +91,6 @@
 "Enter the password for this user, or check your certificate." = "Enter the password for this user, or check your certificate.";
 "Enter the server password to connect to %@." = "Enter the server password to connect to %@.";
 "Europe" = "Europe";
-"Expanded" = "Expanded";
 "Expired" = "Expired";
 "Expires on %@" = "Expires on %@";
 "Export" = "Export";
@@ -228,7 +226,6 @@
 "Settings" = "Settings";
 "Setup progress" = "Setup progress";
 "Shouting" = "Shouting";
-"Show All" = "Show All";
 "Show All Certificates" = "Show All Certificates";
 "Show Certificates" = "Show Certificates";
 "Show Identities Only" = "Show Identities Only";
@@ -297,3 +294,10 @@
 "Your certificate" = "Your certificate";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route.";
 "—" = "—";
+"Quick Connect" = "Quick Connect";
+
+/* Home connections */
+"Manage" = "Manage";
+"Connect directly" = "Connect directly";
+"Browse servers" = "Browse servers";
+"Recent" = "Recent";

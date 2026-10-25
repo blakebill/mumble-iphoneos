@@ -43,8 +43,18 @@ session calls must never run on the main thread. On iOS 27 the asynchronous syst
 API must be used. Callback completion is deliberately delivered from a background
 queue. The script prints results and fails if a check fails or times out.
 
-To exercise the compiled compatibility branch on the same Simulator, create a
-temporary prefix header containing:
+To exercise synchronous session activation on the same Simulator, pass `legacy`
+as the second argument. The fixture overrides only the audio object's API policy;
+the application's compiled background activation/deactivation code still runs.
+The fake synchronous APIs block the session queue until the test releases them,
+checking that the main thread remains available and ordering is preserved.
+
+Incoming-voice checks deliberately block the main thread, verify that DSP still
+receives frames, and cover batched speaking updates, local-mute races, bounded
+queues and reconnect cancellation. All transport and decoding probes are local.
+
+To additionally check the older-SDK preprocessor guards, create a temporary
+prefix header containing:
 
 ```objc
 #import <UIKit/UIKit.h>
@@ -55,10 +65,8 @@ temporary prefix header containing:
 Build into a separate derived data directory with `GCC_PREFIX_HEADER` set to that
 header's absolute path and `GCC_PRECOMPILE_PREFIX_HEADER=NO`. Importing UIKit first
 prevents SDK imports from restoring the current version macro. Then pass `legacy`
-as the second argument to the runner. In this mode the fake
-synchronous APIs block the session queue until the test releases them, ensuring
-that the main thread remains available and ordering is preserved. This also
-checks that the older-SDK preprocessor guards compile without the new APIs.
+as the second argument to the runner. This additional build checks that the
+older-SDK preprocessor guards compile without the new APIs.
 
 The runner requires an iOS 27 Simulator; it does not validate physical audio
 hardware, routes, or a real older-iOS runtime.

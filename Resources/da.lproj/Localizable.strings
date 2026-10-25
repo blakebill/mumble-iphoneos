@@ -60,7 +60,6 @@
 "Choose how to speak" = "Vælg, hvordan du vil tale";
 "Clear Messages" = "Ryd beskeder";
 "Client/server version mismatch" = "Klientens og serverens versioner stemmer ikke overens";
-"Collapsed" = "Skjult";
 "Common Name" = "Almindeligt Navn";
 "Configuration" = "Konfiguration";
 "Connect" = "Forbind";
@@ -92,7 +91,6 @@
 "Enter the password for this user, or check your certificate." = "Indtast denne brugers adgangskode, eller kontrollér dit certifikat.";
 "Enter the server password to connect to %@." = "Indtast serverens adgangskode for at forbinde til %@.";
 "Europe" = "Europa";
-"Expanded" = "Udvidet";
 "Expired" = "Udløbet";
 "Expires on %@" = "Udløber %@";
 "Export" = "Eksportér";
@@ -228,7 +226,6 @@
 "Settings" = "Indstillinger";
 "Setup progress" = "Opsætningsforløb";
 "Shouting" = "Råber";
-"Show All" = "Vis alle";
 "Show All Certificates" = "Vis alle certifikater";
 "Show Certificates" = "Vis certifikater";
 "Show Identities Only" = "Vis kun identiteter";
@@ -297,3 +294,10 @@
 "Your certificate" = "Dit certifikat";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS håndterer ekkoreduktion, støjreduktion og mikrofonens lydniveau. Du kan vælge en mikrofontilstand, før du opretter forbindelse. Tilgængeligheden afhænger af din enhed og lydforbindelse.";
 "—" = "—";
+"Quick Connect" = "Hurtig forbindelse";
+
+/* Home connections */
+"Manage" = "Administrer";
+"Connect directly" = "Opret direkte forbindelse";
+"Browse servers" = "Find servere";
+"Recent" = "Seneste forbindelser";

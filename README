@@ -52,6 +52,7 @@ the local backend integration tests:
 python3 Scripts/check-project-integrity.py
 python3 Scripts/check-localizations.py
 bash Scripts/test-text-messages.sh
+bash Scripts/test-audio-buffers.sh
 bash Scripts/test-libmumble.sh
 ```
 
@@ -59,6 +60,20 @@ bash Scripts/test-libmumble.sh
 build locations and concurrency. Tests run independently of the XCFramework.
 See [the backend notes](Source/LibMumble/README.md) for architecture, compatibility,
 test coverage and physical-device checks.
+
+The Simulator regressions use a separate, ad-hoc signed app so certificate tests
+have Simulator Keychain entitlements. Build and run the complete suite with:
+
+```sh
+xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator -derivedDataPath /tmp/mumble-tests PRODUCT_BUNDLE_IDENTIFIER=com.blakebill.mumble.audio-lifecycle-tests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
+bash Scripts/test-simulator.sh /tmp/mumble-tests/Build/Products/Debug-iphonesimulator/Mumble.app
+```
+
+The runner creates and removes its own devices. It covers both audio-session
+paths, server trees, message storage and previews, interface behaviour, and
+single/dual-column resizing. Native Duo checks also run when a compatible
+Duo device type, runtime and SDK are installed. GitHub Actions retains test
+logs and screenshots for seven days.
 
 The GitHub Actions build uses GitHub's `xcode-27` preview image while Xcode 27
 is unavailable on the regular macOS images. The app's deployment target remains

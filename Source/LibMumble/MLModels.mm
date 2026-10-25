@@ -1,6 +1,11 @@
 #import "MLInternal.hpp"
 
 @implementation MLUser
+@synthesize localMuted=_localMuted;
+- (void)setLocalMuted:(BOOL)muted {
+    if (_localMuted==muted) return;
+    _localMuted=muted; [_audioModel userLocalMuteChanged:self];
+}
 - (instancetype)init { if ((self=[super init])) { _userId=-1; _userName=@""; } return self; }
 - (BOOL)isAuthenticated { return _userId >= 0; }
 - (BOOL)isFriend { return NO; }
@@ -170,7 +175,10 @@ static NSString *MLEscape(NSString *text) {
         case mumble::tcp::Message::Type::UserState: {
             MumbleTCP::UserState message; if (!message.ParseFromArray(data.bytes,(int)data.length) || !message.has_session()) return;
             MLUser *user=_users[@(message.session())]; BOOL added=!user;
-            if (!user) { user=[MLUser new]; user.session=message.session(); _users[@(message.session())]=user; }
+            if (!user) {
+                user=[MLUser new]; user.session=message.session(); user.audioModel=self; _users[@(message.session())]=user;
+                [[MLAudio sharedAudio] setUserLocalMuted:NO session:user.session connection:_connection];
+            }
             MLUser *actor=_users[@(message.actor())];
             if (message.has_name()) { user.userName=MLString(message.name()); MLNotify(serverModel:userRenamed:, serverModel:self userRenamed:user); }
             if (message.has_hash()) user.userHash=MLString(message.hash());
@@ -204,6 +212,7 @@ static NSString *MLEscape(NSString *text) {
         case mumble::tcp::Message::Type::UserRemove: {
             MumbleTCP::UserRemove message; if (!message.ParseFromArray(data.bytes,(int)data.length) || !message.has_session()) return;
             MLUser *user=_users[@(message.session())], *actor=_users[@(message.actor())]; if (!user) return;
+            [[MLAudio sharedAudio] setUserLocalMuted:YES session:user.session connection:_connection];
             [_talkTimers[@(message.session())] invalidate]; [_talkTimers removeObjectForKey:@(message.session())];
             if (message.has_actor()) {
                 if (message.ban()) MLNotify(serverModel:userBanned:byUser:forReason:, serverModel:self userBanned:user byUser:actor forReason:MLString(message.reason()));
@@ -217,6 +226,7 @@ static NSString *MLEscape(NSString *text) {
             _connectedUser=_users[@(message.session())]; if (!_connectedUser) return;
             MLTextMessage *welcome=[MLTextMessage messageWithHTML:MLString(message.welcome_text())];
             [[MLAudio sharedAudio] setMainConnectionForAudio:_connection];
+            for (MLUser *user in _users.allValues) [[MLAudio sharedAudio] setUserLocalMuted:user.isLocalMuted session:user.session connection:_connection];
             [[MLAudio sharedAudio] setLocalMuted:_connectedUser.isSelfMuted || _connectedUser.isMuted || _connectedUser.isSuppressed deafened:_connectedUser.isSelfDeafened || _connectedUser.isDeafened];
             MLNotify(serverModel:joinedServerAsUser:, serverModel:self joinedServerAsUser:self->_connectedUser);
             MLNotify(serverModel:joinedServerAsUser:withWelcomeMessage:, serverModel:self joinedServerAsUser:self->_connectedUser withWelcomeMessage:welcome); break;
@@ -235,6 +245,10 @@ static NSString *MLEscape(NSString *text) {
         }
         default: break;
     }
+}
+- (void)userLocalMuteChanged:(MLUser *)user {
+    NSAssert(NSThread.isMainThread,@"User mute settings run on the main thread");
+    if (_users[@(user.session)]==user) [[MLAudio sharedAudio] setUserLocalMuted:user.isLocalMuted session:user.session connection:_connection];
 }
 - (void)applyTalkState:(MLTalkState)state toUser:(MLUser *)user {
     if (user.talkState==state) return;

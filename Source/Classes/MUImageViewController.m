@@ -8,6 +8,9 @@
 @end
 @implementation MUImageViewController
 - (id)initWithImages:(NSArray<UIImage *> *)images {
+    return [self initWithImageLoader:^(void (^completion)(NSArray<UIImage *> *)){completion(images);}];
+}
+- (id)initWithImageLoader:(MUImageLoader)loader {
     if ((self = [super init])) {
         _previewDirectory = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES] URLByAppendingPathComponent:NSUUID.UUID.UUIDString isDirectory:YES];
         _previewItems = @[];
@@ -15,7 +18,8 @@
         self.contentUnavailableConfiguration = [UIContentUnavailableConfiguration loadingConfiguration];
         NSURL *directory = _previewDirectory;
         __weak MUImageViewController *weakSelf = self;
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        loader(^(NSArray<UIImage *> *images) {
+          dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             NSError *error = nil;
             NSMutableArray *items = [NSMutableArray array];
             if ([NSFileManager.defaultManager createDirectoryAtURL:directory withIntermediateDirectories:YES attributes:nil error:&error]) {
@@ -42,6 +46,7 @@
                 [controller reloadData];
                 if (items.count) controller.currentPreviewItemIndex = 0;
             });
+          });
         });
         self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
     }

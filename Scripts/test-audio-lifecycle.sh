@@ -12,7 +12,7 @@ trap 'xcrun simctl terminate "$validation_device" "$validation_bundle" >/dev/nul
 xcrun --sdk iphonesimulator clang -arch arm64 -mios-simulator-version-min=27.0 \
     -std=c++20 -fobjc-arc -dynamiclib -undefined dynamic_lookup \
     -framework UIKit -framework Foundation -framework AVFoundation \
-    -I"$repo_root/Source/LibMumble" "$repo_root/Tests/AudioLifecycle/MLAudioLifecycleTests.mm" \
+    -I"$repo_root/Source/LibMumble" "$repo_root/Tests/AudioLifecycle/MLAudioLifecycleTests.mm" "$repo_root/Tests/AudioRouting/MLVoiceIngressTests.mm" \
     -o "$validation_dir/MLAudioLifecycleTests.dylib"
 python3 - "$app_path" "$validation_dir/Mumble.app" "$validation_bundle" <<'PY'
 import sys, shutil, plistlib
@@ -34,7 +34,7 @@ rm -f "$result_path"
 if [[ "$test_mode" == legacy ]]; then export SIMCTL_CHILD_ML_AUDIO_TEST_LEGACY=1; else unset SIMCTL_CHILD_ML_AUDIO_TEST_LEGACY; fi
 SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$validation_dir/MLAudioLifecycleTests.dylib" \
     xcrun simctl launch "$validation_device" "$validation_bundle"
-for attempt in {1..150}; do
+for attempt in {1..300}; do
     if [[ -f "$result_path" ]]; then
         cat "$result_path"
         rg -q '^ALL TESTS PASSED$' "$result_path"

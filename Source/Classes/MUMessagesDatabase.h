@@ -6,8 +6,10 @@
 @class MUTextMessage;
 
 @interface MUMessagesDatabase : NSObject
-- (void) addMessage:(MLTextMessage *)msg withHeading:(NSString *)heading andSentBySelf:(BOOL)selfSent;
+@property(nonatomic,copy) void (^messageDidLoad)(NSInteger row, MUTextMessage *message);
+- (void)addMessage:(MLTextMessage *)msg withHeading:(NSString *)heading andSentBySelf:(BOOL)selfSent completion:(void (^)(void))completion;
 - (MUTextMessage *) messageAtIndex:(NSInteger)row;
+- (void)loadImagesAtIndex:(NSInteger)row completion:(void (^)(NSArray<UIImage *> *images))completion;
 - (void) clearMessageAtIndex:(NSInteger)row;
 - (NSInteger) count;
 @end

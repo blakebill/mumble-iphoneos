@@ -60,7 +60,6 @@
 "Choose how to speak" = "選擇講話方式";
 "Clear Messages" = "清空消息";
 "Client/server version mismatch" = "客戶端與伺服器版本不匹配";
-"Collapsed" = "已收起";
 "Common Name" = "通用名稱";
 "Configuration" = "配置";
 "Connect" = "連接";
@@ -92,7 +91,6 @@
 "Enter the password for this user, or check your certificate." = "請輸入此使用者的密碼，或檢查你的憑證。";
 "Enter the server password to connect to %@." = "請輸入伺服器密碼以連接 %@。";
 "Europe" = "歐洲";
-"Expanded" = "已展開";
 "Expired" = "已過期";
 "Expires on %@" = "到期日期：%@";
 "Export" = "匯出";
@@ -228,7 +226,6 @@
 "Settings" = "設定";
 "Setup progress" = "設定進度";
 "Shouting" = "正在喊話";
-"Show All" = "顯示全部";
 "Show All Certificates" = "顯示所有憑證";
 "Show Certificates" = "查看憑證";
 "Show Identities Only" = "僅顯示身份憑證";
@@ -297,3 +294,10 @@
 "Your certificate" = "你的憑證";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS 負責回聲消除、降噪和麥克風音量處理。你可以在連接前選擇麥克風模式。可用模式取決於設備和音訊路由。";
 "—" = "—";
+"Quick Connect" = "快速連線";
+
+/* Home connections */
+"Manage" = "管理";
+"Connect directly" = "直接連線";
+"Browse servers" = "瀏覽伺服器";
+"Recent" = "最近連線";

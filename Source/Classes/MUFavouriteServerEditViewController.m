@@ -11,6 +11,7 @@
 
 @interface MUFavouriteServerEditViewController () {
     BOOL               _editMode;
+    BOOL               _quickConnect;
     MUFavouriteServer  *_favourite;
     id                 _target;
     SEL                _doneAction;
@@ -30,6 +31,8 @@
     UITableViewCell    *_activeCell;
 }
 - (NSInteger) numberOfSectionsInTableView:(UITableView *)tableView;
+- (BOOL)canQuickConnect;
+- (void)notifyDone;
 @end
 
 @implementation MUFavouriteServerEditViewController
@@ -102,7 +105,7 @@
         [_portField setAutocapitalizationType:UITextAutocapitalizationTypeNone];
         [_portField setAutocorrectionType:UITextAutocorrectionTypeNo];
         [_portField setTextAlignment:NSTextAlignmentLeft];
-        [_portField setPlaceholder:@"64738"];
+        [_portField setPlaceholder:@(64738).stringValue];
         [_portField setKeyboardType:UIKeyboardTypeNumbersAndPunctuation];
         if ([_favourite port] != 0)
             [_portField setText:[NSString stringWithFormat:@"%lu", (unsigned long)[_favourite port]]];
@@ -158,6 +161,18 @@
     return [self initInEditMode:NO withContentOfFavouriteServer:nil];
 }
 
+- (instancetype)initForQuickConnect {
+    if ((self = [self initInEditMode:NO withContentOfFavouriteServer:nil])) _quickConnect = YES;
+    return self;
+}
+
+- (BOOL)canQuickConnect {
+    NSString *host = [_addressField.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSString *port = [_portField.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    BOOL validPort = !port.length || ([port rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789"] invertedSet]].location == NSNotFound && port.length <= 5 && port.integerValue > 0 && port.integerValue <= 65535);
+    return host.length > 0 && validPort;
+}
+
 #pragma mark -
 #pragma mark View lifecycle
 
@@ -175,7 +190,9 @@
     }
 
     // View title
-    if (!_editMode) {
+    if (_quickConnect) {
+        self.title = NSLocalizedString(@"Quick Connect", nil);
+    } else if (!_editMode) {
         [[self navigationItem] setTitle:NSLocalizedString(@"New Favourite", nil)];
     } else {
         [[self navigationItem] setTitle:NSLocalizedString(@"Edit Favourite", nil)];
@@ -194,6 +211,12 @@
                                                                   target:self
                                                                   action:@selector(doneClicked:)];
     [[self navigationItem] setRightBarButtonItem:doneButton];
+    if (_quickConnect) {
+        cancelButton.image = [UIImage systemImageNamed:@"xmark"];
+        doneButton.title = NSLocalizedString(@"Connect", nil);
+        doneButton.image = [UIImage systemImageNamed:@"arrow.right"];
+        doneButton.enabled = [self canQuickConnect];
+    }
 }
 
 - (void) viewWillDisappear:(BOOL)animated {
@@ -209,27 +232,13 @@
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) {
-        return 5;
-    }
-    return 0;
+    return section==0 ? self.formCells.count : 0;
 }
-
+- (NSArray<UITableViewCell *> *)formCells {
+    return _quickConnect ? @[_addressCell,_portCell,_usernameCell,_passwordCell] : @[_descriptionCell,_addressCell,_portCell,_usernameCell,_passwordCell];
+}
 - (UITableViewCell *) tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if ([indexPath section] == 0) {
-        if ([indexPath row] == 0) {
-            return _descriptionCell;
-        } else if ([indexPath row] == 1) {
-            return _addressCell;
-        } else if ([indexPath row] == 2) {
-            return _portCell;
-        } else if ([indexPath row] == 3) {
-            return _usernameCell;
-        } else if ([indexPath row] == 4) {
-            return _passwordCell;
-        }
-    }
-    return nil;
+    return self.formCells[indexPath.row];
 }
 
 #pragma mark -
@@ -240,6 +249,19 @@
 }
 
 - (void) doneClicked:(id)sender {
+    if (_quickConnect) {
+        if (![self canQuickConnect]) return;
+        _favourite.hostName = [_addressField.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        _favourite.port = _portField.text.integerValue ?: 64738;
+        NSString *username = [_usernameField.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        _favourite.userName = username.length ? username : [NSUserDefaults.standardUserDefaults stringForKey:@"DefaultUserName"];
+        _favourite.password = _passwordField.text;
+        [self.view endEditing:YES];
+        self.navigationItem.rightBarButtonItem.enabled = NO;
+        // The connection UI belongs to Home, after the form has finished closing.
+        [self.navigationController dismissViewControllerAnimated:YES completion:^{ [self notifyDone]; }];
+        return;
+    }
     // Perform some basic tidying up. For example, for the port field, we
     // want the default port number to be used if it wasn't filled out.
     if ([_favourite displayName] == nil) {
@@ -252,6 +274,10 @@
     // Get rid of oureslves and call back to our target to tell it that
     // we're done.
     [[self navigationController] dismissViewControllerAnimated:YES completion:nil];
+    [self notifyDone];
+}
+
+- (void)notifyDone {
     if (_doneAction != NULL && [_target respondsToSelector:_doneAction]) {
         IMP implementation = [_target methodForSelector:_doneAction];
         void (*invoke)(id, SEL, id) = (void *)implementation;
@@ -319,6 +345,7 @@
     } else if (sender == _passwordField) {
         [_favourite setPassword:[sender text]];
     }
+    if (_quickConnect) self.navigationItem.rightBarButtonItem.enabled = [self canQuickConnect];
 }
 
 - (void) textFieldDidEndOnExit:(UITextField *)sender {

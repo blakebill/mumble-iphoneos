@@ -10,15 +10,22 @@
 @interface MUMessageAttachmentViewController () {
     NSArray *_links;
     NSArray *_images;
+    MUImageLoader _imageLoader;
+    NSUInteger _imageCount;
 }
 @end
 
 @implementation MUMessageAttachmentViewController
 
 - (id) initWithImages:(NSArray *)images andLinks:(NSArray *)links {
+    return [self initWithImages:images andLinks:links imageCount:images.count imageLoader:nil];
+}
+- (id)initWithImages:(NSArray *)images andLinks:(NSArray *)links imageCount:(NSUInteger)count imageLoader:(MUImageLoader)loader {
     if ((self = [super initWithStyle:UITableViewStyleInsetGrouped])) {
         _images = images;
         _links = links;
+        _imageLoader=[loader copy];
+        _imageCount=count;
     }
     return self;
 }
@@ -42,7 +49,7 @@
 #pragma mark - Table view data source
 
 - (NSInteger) numberOfSectionsInTableView:(UITableView *)tableView {
-    BOOL hasImages = [_images count] > 0;
+    BOOL hasImages = _imageCount > 0;
     if (hasImages) {
         return 2;
     } else {
@@ -52,7 +59,7 @@
 }
 
 - (NSInteger) tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    BOOL hasImages = [_images count] > 0;
+    BOOL hasImages = _imageCount > 0;
     if (hasImages && section == 0) {
         return 1;
     } else {
@@ -62,7 +69,7 @@
 }
 
 - (NSString *) tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    BOOL hasImages = [_images count] > 0;
+    BOOL hasImages = _imageCount > 0;
     if (hasImages && section == 0) {
         return NSLocalizedString(@"Images", nil);
     }
@@ -79,15 +86,15 @@
     
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
-    BOOL hasImages = [_images count] > 0;
+    BOOL hasImages = _imageCount > 0;
     if (hasImages && [indexPath section] == 0) {
-        UIImage *img = [_images objectAtIndex:0];
-        UIImage *round = [MUImage tableViewCellImageFromImage:img];
+        UIImage *img = _images.firstObject;
+        UIImage *round = img ? [MUImage tableViewCellImageFromImage:img] : [UIImage systemImageNamed:@"photo.on.rectangle"];
         [cell.imageView setImage:round];
         cell.textLabel.text = NSLocalizedString(@"Images", nil);
         NSString *detailText = NSLocalizedString(@"1 image", nil);
-        if ([_images count] > 1)
-            detailText = [NSString stringWithFormat:NSLocalizedString(@"%lu images", nil), (unsigned long)[_images count]];
+        if (_imageCount > 1)
+            detailText = [NSString stringWithFormat:NSLocalizedString(@"%lu images", nil), (unsigned long)_imageCount];
         cell.detailTextLabel.text = detailText;
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else {
@@ -104,9 +111,9 @@
 #pragma mark - Table view delegate
 
 - (void) tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    BOOL hasImages = [_images count] > 0;
+    BOOL hasImages = _imageCount > 0;
     if (hasImages && [indexPath section] == 0) {
-        MUImageViewController *imgViewController = [[MUImageViewController alloc] initWithImages:_images];
+        MUImageViewController *imgViewController = _imageLoader ? [[MUImageViewController alloc] initWithImageLoader:_imageLoader] : [[MUImageViewController alloc] initWithImages:_images];
         [self.navigationController pushViewController:imgViewController animated:YES];
     } else {
         [[UIApplication sharedApplication] openURL:[NSURL URLWithString:[_links objectAtIndex:[indexPath row]]] options:@{} completionHandler:nil];

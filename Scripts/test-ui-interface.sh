@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 app_path="${1:?Usage: bash Scripts/test-ui-interface.sh /path/to/Simulator/Mumble.app}"
 validation_root="$(mktemp -d "${TMPDIR:-/tmp}/mumble-ui-tests.XXXXXX")"
 mkdir -p "$validation_root"
-xcrun --sdk iphonesimulator clang -fmodules -fmodules-cache-path=/tmp/mumble-preview-clang-modules -arch arm64 -mios-simulator-version-min=27.0 -fobjc-arc -dynamiclib -undefined dynamic_lookup -framework UIKit -framework Foundation -framework PhotosUI -framework UniformTypeIdentifiers -I "$repo_root/Source/Classes" -I "$repo_root/Source/LibMumble" "$repo_root/Tests/UIInterface/MUInterfaceAuditValidation.m" -o "$validation_root/MUNativeUIValidation.dylib"
+xcrun --sdk iphonesimulator clang -fmodules -fmodules-cache-path=/tmp/mumble-preview-clang-modules -arch arm64 -mios-simulator-version-min=27.0 -fobjc-arc -dynamiclib -undefined dynamic_lookup -framework UIKit -framework Foundation -framework PhotosUI -framework UniformTypeIdentifiers -I "$repo_root/Source/Classes" -I "$repo_root/Source/LibMumble" "$repo_root/Tests/UIInterface/MUInterfaceAuditValidation.m" "$repo_root/Tests/MessageStore/MUMessageStoreChecks.m" -o "$validation_root/MUNativeUIValidation.dylib"
 python3 - "$app_path" "$validation_root/Mumble.app" <<'PY'
 from pathlib import Path
 import shutil,plistlib,sys
@@ -32,7 +32,7 @@ if [[ -n "${MU_UI_TEST_LANGUAGE:-}" ]]; then
     launch_arguments+=(-AppleLanguages "($MU_UI_TEST_LANGUAGE)")
 fi
 SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$validation_root/MUNativeUIValidation.dylib" SIMCTL_CHILD_MU_UI_TEST_LANGUAGE="${MU_UI_TEST_LANGUAGE:-}" xcrun simctl launch "$validation_device" "${launch_arguments[@]}"
-for attempt in {1..300}; do
+for attempt in {1..600}; do
     if [[ -f "$validation_data/Documents/composer-ui-results.txt" ]]; then
         cat "$validation_data/Documents/composer-ui-results.txt"
         rg -q '^ALL INTERFACE AUDIT CHECKS PASSED$' "$validation_data/Documents/composer-ui-results.txt"

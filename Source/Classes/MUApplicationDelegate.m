@@ -181,10 +181,6 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
     return YES;
 }
 
-- (void) applicationWillTerminate:(UIApplication *)application {
-    [MUDatabase teardown];
-}
-
 - (void) setupAudio {
     // Set up a good set of default audio settings.
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];

@@ -60,7 +60,6 @@
 "Choose how to speak" = "Escolha como falar";
 "Clear Messages" = "Limpar mensagens";
 "Client/server version mismatch" = "Versões do cliente e do servidor incompatíveis";
-"Collapsed" = "Recolhido";
 "Common Name" = "Nome comum";
 "Configuration" = "Configuração";
 "Connect" = "Conectar";
@@ -92,7 +91,6 @@
 "Enter the password for this user, or check your certificate." = "Digite a senha deste usuário ou verifique seu certificado.";
 "Enter the server password to connect to %@." = "Digite a senha do servidor para conectar a %@.";
 "Europe" = "Europa";
-"Expanded" = "Expandido";
 "Expired" = "Expirado";
 "Expires on %@" = "Expira em %@";
 "Export" = "Exportar";
@@ -228,7 +226,6 @@
 "Settings" = "Ajustes";
 "Setup progress" = "Progresso da configuração";
 "Shouting" = "Gritando";
-"Show All" = "Mostrar tudo";
 "Show All Certificates" = "Mostrar todos os certificados";
 "Show Certificates" = "Mostrar certificados";
 "Show Identities Only" = "Mostrar apenas identidades";
@@ -297,3 +294,10 @@
 "Your certificate" = "Seu certificado";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "O iOS controla o cancelamento de eco, a redução de ruído e o nível do microfone. Escolha o modo do microfone antes de conectar. A disponibilidade depende do dispositivo e da rota de áudio.";
 "—" = "—";
+"Quick Connect" = "Conexão rápida";
+
+/* Home connections */
+"Manage" = "Gerenciar";
+"Connect directly" = "Conectar diretamente";
+"Browse servers" = "Explorar servidores";
+"Recent" = "Conexões recentes";

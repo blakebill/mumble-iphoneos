@@ -120,6 +120,13 @@ static void MUDatabasePerform(dispatch_block_t block) {
                       @" `digest` TEXT)"];
     [db executeUpdate:@"CREATE UNIQUE INDEX IF NOT EXISTS `cert_host_port`"
                       @" on `cert`(`hostname`,`port`)"];
+    [db executeUpdate:@"CREATE TABLE IF NOT EXISTS `recent_servers` "
+                      @"(`id` INTEGER PRIMARY KEY AUTOINCREMENT,"
+                      @" `hostname` TEXT NOT NULL COLLATE NOCASE,"
+                      @" `port` INTEGER NOT NULL,"
+                      @" `name` TEXT,"
+                      @" `username` TEXT,"
+                      @" UNIQUE(`hostname`,`port`))"];
     [db executeUpdate:@"CREATE TABLE IF NOT EXISTS `usernames` "
                       @"(`id` INTEGER PRIMARY KEY AUTOINCREMENT,"
                       @" `hostname` TEXT,"
@@ -138,11 +145,6 @@ static void MUDatabasePerform(dispatch_block_t block) {
     if ([db hadError]) {
         NSLog(@"MUDatabase: Error: %@ (Code: %i)", [db lastErrorMessage], [db lastErrorCode]);
     }
-}
-
-// Tear down the database
-+ (void) teardown {
-    
 }
 
 // Store a single favourite
@@ -237,6 +239,41 @@ static void MUDatabasePerform(dispatch_block_t block) {
 }
 
 #pragma mark -
+#pragma mark Recent connections
+
++ (void)recordRecentServerWithHostname:(NSString *)hostname port:(NSUInteger)port displayName:(NSString *)displayName username:(NSString *)username {
+    NSString *host = [[hostname stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] lowercaseString];
+    if (!host.length || port == 0 || port > UINT16_MAX) return;
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [db beginTransaction];
+        [db executeUpdate:@"INSERT OR REPLACE INTO `recent_servers` (`hostname`,`port`,`name`,`username`) VALUES (?,?,?,?)",
+            host, @(port), displayName.length ? displayName : hostname, username ?: @""];
+        [db executeUpdate:@"DELETE FROM `recent_servers` WHERE `id` NOT IN (SELECT `id` FROM `recent_servers` ORDER BY `id` DESC LIMIT 3)"];
+        [db commit];
+    });
+}
+
++ (NSArray<MUFavouriteServer *> *)recentServers {
+    __block NSMutableArray *servers = [NSMutableArray array];
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        FMResultSet *rows = [db executeQuery:@"SELECT `hostname`,`port`,`name`,`username` FROM `recent_servers` ORDER BY `id` DESC LIMIT 3"];
+        while ([rows next]) {
+            [servers addObject:[[MUFavouriteServer alloc] initWithDisplayName:[rows stringForColumn:@"name"] hostName:[rows stringForColumn:@"hostname"] port:[rows intForColumn:@"port"] userName:[rows stringForColumn:@"username"] password:nil]];
+        }
+        [rows close];
+    });
+    return servers;
+}
+
++ (void)deleteRecentServer:(MUFavouriteServer *)server {
+    MUDatabasePerform(^{
+        [self openDatabaseIfNeeded];
+        [db executeUpdate:@"DELETE FROM `recent_servers` WHERE `hostname`=? AND `port`=?", server.hostName.lowercaseString, @(server.port)];
+    });
+}
+
 #pragma mark Certificate verification
 
 + (void) storeDigest:(NSString *)hash forServerWithHostname:(NSString *)hostname port:(NSInteger)port {

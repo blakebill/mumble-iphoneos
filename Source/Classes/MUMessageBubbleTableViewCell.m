@@ -120,7 +120,7 @@ static NSString *MUMessageMetadata(NSString *footer, NSDate *date) {
 }
 
 // The row measurement and displayed content share the same layout, including Dynamic Type.
-static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, NSArray<UIImage *> *images,
+static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, NSArray *images,
                                         NSString *metadata, CGFloat width, UITraitCollection *traits, BOOL rightSide) {
     MUMessageLayout *layout = [MUMessageLayout new];
     CGFloat availableWidth = MAX(1, width - 2 * (MUMessageInset + 6));
@@ -130,8 +130,8 @@ static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, N
     CGFloat textBubbleWidth = MAX(40, textSize.width + 2 * MUMessagePadding);
     CGFloat contentWidth = textSize.height ? textBubbleWidth : 40;
     NSMutableArray<NSValue *> *imageSizes = [NSMutableArray array];
-    for (UIImage *image in images) {
-        CGSize size = image.size;
+    for (id image in images) {
+        CGSize size = [image isKindOfClass:NSValue.class] ? [image CGSizeValue] : [(UIImage *)image size];
         if (size.width <= 0 || size.height <= 0) { [imageSizes addObject:[NSValue valueWithCGSize:CGSizeZero]]; continue; }
         CGFloat scale = MIN(1, MIN(maxBubbleWidth / size.width, 320 / size.height));
         size = CGSizeMake(MAX(40, floor(size.width * scale)), MAX(36, floor(size.height * scale)));
@@ -180,6 +180,7 @@ static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, N
     CGRect _imageRect;
     BOOL _selected;
     NSArray *_shownImages;
+    NSArray<NSValue *> *_shownImageSizes;
     __weak MUMessageBubbleTableViewCell *_cell;
     UIEditMenuInteraction *_editMenuInteraction;
     BOOL _editMenuVisible;
@@ -198,6 +199,8 @@ static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, N
 - (void)setMessage:(NSString *)msg;
 - (void)setDate:(NSDate *)date;
 - (void)setShownImages:(NSArray *)shownImages;
+- (void)setShownImageSizes:(NSArray<NSValue *> *)sizes;
+- (void)updateImageViews;
 - (void)setRightSide:(BOOL)rightSide;
 - (CGRect)selectionRect;
 - (BOOL)attachmentFooterContainsPoint:(CGPoint)point;
@@ -248,7 +251,7 @@ static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, N
 - (void)layoutSubviews {
     [super layoutSubviews];
     NSString *metadata = MUMessageMetadata(_footer, _date);
-    MUMessageLayout *layout = MUMessageMeasure(_heading, _message, _shownImages, metadata, self.bounds.size.width, self.traitCollection, _rightSide);
+    MUMessageLayout *layout = MUMessageMeasure(_heading, _message, _shownImageSizes ?: _shownImages, metadata, self.bounds.size.width, self.traitCollection, _rightSide);
     _imageRect = layout.bubbleRect;
     _headingLabel.font = MUMessageFont(UIFontTextStyleCaption1, self.traitCollection);
     _messageLabel.font = MUMessageFont(UIFontTextStyleBody, self.traitCollection);
@@ -310,14 +313,26 @@ static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, N
 - (void)setRightSide:(BOOL)value { _rightSide = value; [self setNeedsLayout]; }
 - (void)setShownImages:(NSArray *)images {
     _shownImages = [images copy];
-    for (UIImageView *view in _imageViews) [view removeFromSuperview];
-    [_imageViews removeAllObjects];
-    for (UIImage *image in images) {
-        UIImageView *view = [[UIImageView alloc] initWithImage:image];
+    [self updateImageViews];
+}
+- (void)setShownImageSizes:(NSArray<NSValue *> *)sizes {
+    _shownImageSizes=[sizes copy];
+    [self updateImageViews];
+}
+- (void)updateImageViews {
+    NSUInteger count=_shownImageSizes ? _shownImageSizes.count : _shownImages.count;
+    while (_imageViews.count>count) { [_imageViews.lastObject removeFromSuperview];[_imageViews removeLastObject]; }
+    while (_imageViews.count<count) {
+        UIImageView *view = [UIImageView new];
         view.contentMode = UIViewContentModeScaleAspectFill;
         view.clipsToBounds = YES;
         [self addSubview:view];
         [_imageViews addObject:view];
+    }
+    for(NSUInteger i=0;i<count;i++) {
+        UIImageView *view=_imageViews[i];UIImage *image=i<_shownImages.count ? _shownImages[i] : nil;
+        if(view.image!=image)view.image=image;
+        view.backgroundColor=image ? UIColor.clearColor : UIColor.tertiarySystemFillColor;
     }
     [self setNeedsLayout];
 }
@@ -449,6 +464,7 @@ static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, N
     [super prepareForReuse];
     [_bubbleView dismissEditMenu];
     [_bubbleView setSelected:NO];
+    [_bubbleView setShownImageSizes:nil];
     [_bubbleView setShownImages:nil];
     _delegate = nil;
 }
@@ -484,6 +500,7 @@ static MUMessageLayout *MUMessageMeasure(NSString *heading, NSString *message, N
 - (void)setHeading:(NSString *)value { [_bubbleView setHeading:value]; }
 - (void)setMessage:(NSString *)value { [_bubbleView setMessage:value]; }
 - (void)setShownImages:(NSArray *)value { [_bubbleView setShownImages:value]; }
+- (void)setShownImageSizes:(NSArray<NSValue *> *)sizes { [_bubbleView setShownImageSizes:sizes]; }
 - (void)setFooter:(NSString *)value { [_bubbleView setFooter:value]; }
 - (void)setDate:(NSDate *)value { [_bubbleView setDate:value]; }
 - (void)setRightSide:(BOOL)value { [_bubbleView setRightSide:value]; }

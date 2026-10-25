@@ -139,13 +139,8 @@ static void ShowAlertDialog(UIViewController *presenter, NSString *title, NSStri
 
 // Customize the appearance of table view cells.
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSUInteger row = [indexPath row];
-    if (row == 0) { // Full name
-        return _nameCell;
-    } else if (row == 1) { // Email
-        return _emailCell;
-    }
-    return nil;
+    NSParameterAssert(indexPath.row<2);
+    return indexPath.row==0 ? _nameCell : _emailCell;
 }
 
 #pragma mark -

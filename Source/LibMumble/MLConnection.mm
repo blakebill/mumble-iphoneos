@@ -14,16 +14,20 @@
 #include <mutex>
 #include <deque>
 #include <chrono>
+#include <unordered_map>
 
 using namespace mumble;
 using MLClock=std::chrono::steady_clock;
 struct MLVoiceFrame { Buf data; uint64_t sequence; bool terminator; };
+struct MLVoiceActivity { MLTalkState state=MLTalkStatePassive; bool hasAudio=false, terminator=false; };
 struct MLNetworkState {
     std::atomic_bool halt{false};
     std::mutex mutex;
     int socket=-1;
     std::deque<Buf> outgoing;
     std::deque<MLVoiceFrame> voice;
+    std::unordered_map<NSUInteger,MLVoiceActivity> pendingVoiceActivity;
+    bool voiceActivityScheduled=false;
     int wakeReader=-1, wakeWriter=-1;
     MLNetworkState() {
         int pair[2];
@@ -134,6 +138,28 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     auto state=[self networkState]; if (state) state->cancel(); _connected=NO;
     [[MLAudio sharedAudio] setMainConnectionForAudio:nil];
 }
+- (void)queueReceivedVoice:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence talkState:(MLTalkState)talk terminator:(BOOL)terminator state:(const std::shared_ptr<MLNetworkState> &)state {
+    if (state->halt || [self networkState]!=state) return;
+    [[MLAudio sharedAudio] receiveOpus:data session:session sequence:sequence terminator:terminator fromConnection:self];
+    {
+        std::lock_guard guard(state->mutex);
+        if (state->pendingVoiceActivity.size()>=1024 && !state->pendingVoiceActivity.contains(session)) return;
+        auto &activity=state->pendingVoiceActivity[session];
+        activity.state=talk; activity.hasAudio=activity.hasAudio || data.length>0; activity.terminator=terminator;
+        if (state->voiceActivityScheduled) return;
+        state->voiceActivityScheduled=true;
+    }
+    auto ownedState=state;
+    // Speaking indicators may wait for UIKit. Encoded voice never does. Keep
+    // short speech/terminators when coalescing several packets from one user.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,50*NSEC_PER_MSEC),dispatch_get_main_queue(), ^{
+        std::unordered_map<NSUInteger,MLVoiceActivity> activity;
+        { std::lock_guard guard(ownedState->mutex);
+          activity.swap(ownedState->pendingVoiceActivity); ownedState->voiceActivityScheduled=false; }
+        if ([self networkState]!=ownedState || ownedState->halt) return;
+        for (const auto &[session,frame]:activity) [self.model receivedVoiceForSession:session talkState:frame.state hasAudio:frame.hasAudio terminator:frame.terminator];
+    });
+}
 - (void)connectToHost:(NSString *)hostname port:(NSUInteger)port {
     [self disconnect];
     if (![_hostname isEqual:hostname] || _port!=port) _acceptedCertificate=nil;
@@ -200,7 +226,7 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
             NSData *opus=MLData(audio.opusData); auto session=*audio.senderSession; auto sequence=audio.frameNumber; BOOL end=audio.isTerminator;
             if (opus.length) lastVoice=MLClock::now();
             MLTalkState talk=audio.context==1?MLTalkStateShouting:audio.context==2?MLTalkStateWhispering:MLTalkStateTalking;
-            [self deliver:state block:^{ [self.model receivedVoiceForSession:session talkState:talk hasAudio:opus.length>0 terminator:end]; [[MLAudio sharedAudio] receiveOpus:opus session:session sequence:sequence terminator:end]; }];
+            [self queueReceivedVoice:opus session:session sequence:sequence talkState:talk terminator:end state:state];
         } else {
             uint8_t type=std::to_integer<uint8_t>(packet[0])>>5;
             if (type==1) { lastUDP=MLClock::now(); return; } // Legacy encrypted ping.
@@ -213,7 +239,7 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
             if (opus.length) lastVoice=MLClock::now();
             uint8_t context=std::to_integer<uint8_t>(packet[0]) & 31;
             MLTalkState talk=context==1?MLTalkStateShouting:context==2?MLTalkStateWhispering:MLTalkStateTalking;
-            [self deliver:state block:^{ [self.model receivedVoiceForSession:(NSUInteger)session talkState:talk hasAudio:opus.length>0 terminator:end]; [[MLAudio sharedAudio] receiveOpus:opus session:(NSUInteger)session sequence:sequence terminator:end]; }];
+            [self queueReceivedVoice:opus session:(NSUInteger)session sequence:sequence talkState:talk terminator:end state:state];
         }
     };
     Connection::Feedback feedback;

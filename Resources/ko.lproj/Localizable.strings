@@ -60,7 +60,6 @@
 "Choose how to speak" = "말하기 방식 선택";
 "Clear Messages" = "메시지 지우기";
 "Client/server version mismatch" = "클라이언트와 서버 버전이 일치하지 않습니다";
-"Collapsed" = "접힘";
 "Common Name" = "일반 이름";
 "Configuration" = "구성";
 "Connect" = "연결";
@@ -92,7 +91,6 @@
 "Enter the password for this user, or check your certificate." = "이 사용자의 암호를 입력하거나 인증서를 확인하세요.";
 "Enter the server password to connect to %@." = "%@에 연결할 서버 암호를 입력하세요.";
 "Europe" = "유럽";
-"Expanded" = "펼쳐짐";
 "Expired" = "만료됨";
 "Expires on %@" = "만료일: %@";
 "Export" = "내보내기";
@@ -228,7 +226,6 @@
 "Settings" = "설정";
 "Setup progress" = "설정 진행 상황";
 "Shouting" = "큰 소리로 말하는 중";
-"Show All" = "모두 보기";
 "Show All Certificates" = "모든 인증서 보기";
 "Show Certificates" = "인증서 보기";
 "Show Identities Only" = "본인 인증서만 보기";
@@ -297,3 +294,10 @@
 "Your certificate" = "내 인증서";
 "iOS handles echo cancellation, noise reduction and microphone level. You can choose a microphone mode before connecting. Availability depends on your device and audio route." = "iOS가 에코 제거, 잡음 감소, 마이크 레벨을 처리합니다. 연결 전에 마이크 모드를 선택할 수 있습니다. 사용 가능한 모드는 기기와 오디오 경로에 따라 다릅니다.";
 "—" = "—";
+"Quick Connect" = "빠른 연결";
+
+/* Home connections */
+"Manage" = "관리";
+"Connect directly" = "직접 연결";
+"Browse servers" = "서버 둘러보기";
+"Recent" = "최근 연결";

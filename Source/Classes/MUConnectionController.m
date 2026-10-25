@@ -29,6 +29,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     NSUInteger                 _port;
     NSString                   *_username;
     NSString                   *_password;
+    NSString                   *_displayName;
     NSInteger                  _favouritePrimaryKey;
     BOOL                       _savePasswordOnJoin;
     NSUInteger                 _connectionAttempt;
@@ -40,7 +41,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
 - (void) hideConnectingView;
 - (void) hideConnectingViewWithCompletion:(void(^)(void))completion;
 - (void)presentConnectionAlert:(UIAlertController *)alert forAttempt:(NSUInteger)attempt;
-- (void)beginConnectionToHostname:(NSString *)hostname port:(NSUInteger)port username:(NSString *)username password:(NSString *)password favouriteKey:(NSInteger)key parent:(UIViewController *)parent;
+- (void)beginConnectionToHostname:(NSString *)hostname port:(NSUInteger)port username:(NSString *)username password:(NSString *)password displayName:(NSString *)displayName favouriteKey:(NSInteger)key parent:(UIViewController *)parent;
 @end
 
 @implementation MUConnectionController
@@ -55,19 +56,20 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
 }
 
 - (void) connectToHostname:(NSString *)hostName port:(NSUInteger)port withUsername:(NSString *)userName andPassword:(NSString *)password withParentViewController:(UIViewController *)parentViewController {
-    [self beginConnectionToHostname:hostName port:port username:userName password:password favouriteKey:-1 parent:parentViewController];
+    [self beginConnectionToHostname:hostName port:port username:userName password:password displayName:nil favouriteKey:-1 parent:parentViewController];
 }
 
 - (void)connectToFavouriteServer:(MUFavouriteServer *)server withParentViewController:(UIViewController *)parentViewController {
     NSString *username = server.userName.length ? server.userName : [NSUserDefaults.standardUserDefaults stringForKey:@"DefaultUserName"];
-    [self beginConnectionToHostname:server.hostName port:server.port username:username password:server.password favouriteKey:server.primaryKey parent:parentViewController];
+    [self beginConnectionToHostname:server.hostName port:server.port username:username password:server.password displayName:server.displayName favouriteKey:server.primaryKey parent:parentViewController];
 }
 
-- (void)beginConnectionToHostname:(NSString *)hostname port:(NSUInteger)port username:(NSString *)username password:(NSString *)password favouriteKey:(NSInteger)key parent:(UIViewController *)parent {
+- (void)beginConnectionToHostname:(NSString *)hostname port:(NSUInteger)port username:(NSString *)username password:(NSString *)password displayName:(NSString *)displayName favouriteKey:(NSInteger)key parent:(UIViewController *)parent {
     _hostname = [hostname copy];
     _port = port;
     _username = [username copy];
     _password = [password copy];
+    _displayName = [displayName copy];
     _favouritePrimaryKey = key;
     _savePasswordOnJoin = NO;
     _rejectAlertCtrl = nil;
@@ -533,6 +535,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
     }
     _savePasswordOnJoin = NO;
     [MUDatabase storeUsername:[user userName] forServerWithHostname:[model hostname] port:[model port]];
+    [MUDatabase recordRecentServerWithHostname:_hostname port:_port displayName:_displayName username:user.userName];
 
     [self hideConnectingViewWithCompletion:^{
         [self->_serverRoot takeOwnershipOfConnectionDelegate];
@@ -540,6 +543,7 @@ NSString *MUConnectionClosedNotification = @"MUConnectionClosedNotification";
         self->_username = nil;
         self->_hostname = nil;
         self->_password = nil;
+        self->_displayName = nil;
         
         self->_serverRoot.modalPresentationStyle = UIModalPresentationFullScreen;
         [[self->_parentViewController navigationController] presentViewController:self->_serverRoot animated:YES completion:nil];
