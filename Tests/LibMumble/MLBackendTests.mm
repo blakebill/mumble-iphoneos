@@ -36,6 +36,7 @@ static bool completed=false;
 - (void)endMetering {}
 - (NSDictionary *)copyAudioOutputMixerDebugInfo { return @{}; }
 - (void)setMainConnectionForAudio:(MLConnection *)connection {}
+- (void)setUserLocalMuted:(BOOL)muted session:(NSUInteger)session connection:(MLConnection *)connection {}
 - (void)setLocalMuted:(BOOL)muted deafened:(BOOL)deafened {}
 - (void)setBandwidthLimit:(uint32_t)bandwidth {}
 - (void)receiveOpus:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator {
@@ -45,6 +46,10 @@ static bool completed=false;
         float samples[5760]; auto result=decoder(samples,MLBytes(data)); assert(result.size()==960);
     } else assert(terminator);
     ++receivedVoice;
+}
+- (void)receiveOpus:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator fromConnection:(MLConnection *)connection {
+    assert(connection);
+    [self receiveOpus:data session:session sequence:sequence terminator:terminator];
 }
 @end
 
