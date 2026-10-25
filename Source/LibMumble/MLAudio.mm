@@ -9,6 +9,7 @@
 #include <atomic>
 #include <array>
 #include <cmath>
+#include "MLCaptureBufferQueue.hpp"
 
 NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
 
@@ -21,9 +22,22 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
 }
 @property(nonatomic,strong) AVAudioPlayerNode *player;
 @property(nonatomic) NSTimeInterval lastPacket;
+- (AVAudioPCMBuffer *)bufferWithFormat:(AVAudioFormat *)format;
+- (void)recycleBuffer:(AVAudioPCMBuffer *)buffer;
 @end
-@implementation MLPlayback
-- (instancetype)init { if ((self=[super init])) { decoder=std::make_unique<mumble::Opus::Decoder>(1); decoder->init(); } return self; }
+@implementation MLPlayback {
+    NSMutableArray<AVAudioPCMBuffer *> *_freeBuffers;
+}
+- (instancetype)init { if ((self=[super init])) { decoder=std::make_unique<mumble::Opus::Decoder>(1); decoder->init(); _freeBuffers=[NSMutableArray array]; } return self; }
+- (AVAudioPCMBuffer *)bufferWithFormat:(AVAudioFormat *)format {
+    AVAudioPCMBuffer *buffer=_freeBuffers.lastObject;
+    if (buffer) [_freeBuffers removeLastObject];
+    else buffer=[[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:5760];
+    return buffer;
+}
+- (void)recycleBuffer:(AVAudioPCMBuffer *)buffer {
+    if (_freeBuffers.count<24) [_freeBuffers addObject:buffer];
+}
 @end
 
 @implementation MLAudio {
@@ -43,7 +57,7 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
     std::mutex _settingsMutex;
     std::atomic_bool _running, _forced, _localMuted, _localDeafened;
     std::atomic_bool _captureNeeded;
-    std::atomic_size_t _meterUsers, _captureBacklog;
+    std::atomic_size_t _meterUsers;
     std::atomic_uint64_t _tapCount, _processedCount;
     std::atomic_bool _captureWarmup;
     std::atomic_bool _meterOwnsCapture;
@@ -56,6 +70,7 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
     NSUInteger _lifecycleGeneration;
     std::atomic_size_t _generation;
     dispatch_source_t _cleanupTimer;
+    dispatch_source_t _captureSource;
     NSTimer *_engineRetryTimer;
     NSTimer *_captureMonitorTimer;
     uint64_t _lastTapSeen, _lastProcessedSeen;
@@ -270,9 +285,10 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         completed(inactive,error);
     });
 }
+- (AVAudioEngine *)makeAudioEngine { return [AVAudioEngine new]; }
 - (void)startEngineWithSettings:(MLAudioSettings)settings {
     NSError *error=nil;
-    _engine=[AVAudioEngine new];
+    _engine=[self makeAudioEngine];
     _engine.autoShutdownEnabled=NO;
     if (![self configureVoiceProcessingForInput:_engine.inputNode settings:settings error:&error]) { [self engineStartupFailed:error]; return; }
     AVAudioFormat *input=[_engine.inputNode outputFormatForBus:0];
@@ -295,6 +311,27 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
     NSUInteger generation=++_generation;
     uint64_t tapBaseline=_tapCount;
     __weak MLAudio *weakSelf=self;
+    auto buffers=std::make_shared<MLCaptureBufferQueue>(input,8192);
+    if (!buffers->valid) {
+        [self engineStartupFailed:[NSError errorWithDomain:@"MLAudio" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Microphone buffers unavailable"}]];
+        return;
+    }
+    _captureSource=dispatch_source_create(DISPATCH_SOURCE_TYPE_DATA_ADD,0,0,_queue);
+    dispatch_source_t captureSource=_captureSource;
+    dispatch_source_set_event_handler(captureSource, ^{
+        MLAudio *audio=weakSelf;
+        if (!audio || !audio->_running || generation!=audio->_generation) return;
+        // Bound each drain so playback, settings and teardown can share the queue.
+        for (size_t count=0;count<MLCaptureBufferQueue::slotCount;++count) {
+            if (!audio->_running || generation!=audio->_generation) break;
+            auto *slot=buffers->front(); if (!slot) break;
+            slot->buffer.frameLength=slot->frames;
+            [audio capture:slot->buffer];
+            buffers->pop();
+        }
+        if (buffers->front()) dispatch_source_merge_data(audio->_captureSource,1);
+    });
+    dispatch_resume(captureSource);
     [_engine.inputNode installTapOnBus:0 bufferSize:480 format:input block:^(AVAudioPCMBuffer *buffer,AVAudioTime *time) {
         MLAudio *audio=weakSelf; if (!audio || generation!=audio->_generation) return;
         // Count callback delivery even when mute/PTT intentionally skips DSP.
@@ -306,16 +343,14 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
             });
         }
         if (!audio->_captureNeeded) return;
-        // Never accumulate stale microphone data when decoding or hardware stalls.
-        if (audio->_captureBacklog.fetch_add(1)>=4) { --audio->_captureBacklog; return; }
-        AVAudioPCMBuffer *copy=[[AVAudioPCMBuffer alloc] initWithPCMFormat:buffer.format frameCapacity:buffer.frameLength]; copy.frameLength=buffer.frameLength;
-        if (!copy) { --audio->_captureBacklog; return; }
-        for (UInt32 i=0;i<buffer.audioBufferList->mNumberBuffers;++i)
-            memcpy(copy.mutableAudioBufferList->mBuffers[i].mData,buffer.audioBufferList->mBuffers[i].mData,buffer.audioBufferList->mBuffers[i].mDataByteSize);
-        dispatch_async(audio->_queue, ^{
-            if (audio->_running && generation==audio->_generation) [audio capture:copy];
-            --audio->_captureBacklog;
-        });
+        AVAudioFrameCount frames=buffer.frameLength, offset=0;
+        const AudioBufferList *inputBuffers=buffer.audioBufferList;
+        while (offset<frames) {
+            AVAudioFrameCount count=std::min(buffers->capacity,frames-offset);
+            if (!buffers->push(*inputBuffers,count,offset)) break;
+            offset+=count;
+        }
+        if (frames) dispatch_source_merge_data(captureSource,1);
     }];
     _tapInstalled=YES;
     [_engine prepare];
@@ -401,8 +436,11 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
     dispatch_sync(_queue, ^{
         if (self->_cleanupTimer) { dispatch_source_cancel(self->_cleanupTimer); self->_cleanupTimer=nil; }
         if (self->_tapInstalled) { [self->_engine.inputNode removeTapOnBus:0]; self->_tapInstalled=NO; }
+        if (self->_captureSource) { dispatch_source_cancel(self->_captureSource); self->_captureSource=nil; }
         [self->_engine stop];
         if (self->_transmitting) [self->_connection sendOpus:[NSData data] sequence:self->_sequence terminator:YES];
+        MLConnection *connection=self->_connection;
+        dispatch_async(dispatch_get_main_queue(), ^{ [connection.model setTalkState:MLTalkStatePassive forSession:connection.model.connectedUser.session]; });
         for (MLPlayback *playback in self->_players.allValues) [playback.player stop];
         [self->_players removeAllObjects]; self->_encoder.reset();
         if (self->_preprocessor) speex_preprocess_state_destroy(self->_preprocessor);
@@ -611,12 +649,17 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         if (result==AVAudioConverterOutputStatus_Error || !converted.frameLength) return;
     }
     MLAudioSettings settings=self.settings;
-    if (!converted.frameLength) return;
+    AVAudioFrameCount frameCount=converted.frameLength;
+    if (!frameCount) return;
     if (_processedCount.fetch_add(1)==_processingLogBaseline)
-        NSLog(@"Microphone PCM processing started: %u frames",converted.frameLength);
-    for (AVAudioFrameCount i=0;i<converted.frameLength;++i) {
-        float sample=std::clamp(converted.floatChannelData[0][i]*settings.micBoost,-1.f,1.f);
-        _pending.push_back((int16_t)lrintf(sample*32767));
+        NSLog(@"Microphone PCM processing started: %u frames",frameCount);
+    const float *inputSamples=converted.floatChannelData[0];
+    size_t previousSize=_pending.size();
+    _pending.resize(previousSize+frameCount);
+    int16_t *outputSamples=_pending.data()+previousSize;
+    for (AVAudioFrameCount i=0;i<frameCount;++i) {
+        float sample=std::clamp(inputSamples[i]*settings.micBoost,-1.f,1.f);
+        outputSamples[i]=(int16_t)lrintf(sample*32767);
     }
     size_t samples=(size_t)settings.audioPerPacket*480;
     size_t consumed=0;
@@ -651,7 +694,8 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         }
         if (settings.enableSideTone && settings.sidetoneVolume>0 && transmit) {
             AVAudioPCMBuffer *buffer=[[AVAudioPCMBuffer alloc] initWithPCMFormat:_format frameCapacity:(AVAudioFrameCount)samples]; buffer.frameLength=(AVAudioFrameCount)samples;
-            for (size_t i=0;i<samples;++i) buffer.floatChannelData[0][i]=_pending[consumed+i]/32768.f*settings.sidetoneVolume;
+            float *output=buffer.floatChannelData[0];
+            for (size_t i=0;i<samples;++i) output[i]=_pending[consumed+i]/32768.f*settings.sidetoneVolume;
             [_sidetone scheduleBuffer:buffer completionHandler:nil];
         }
         _transmitting=transmit; _sequence+=samples/480; consumed+=samples;
@@ -678,21 +722,31 @@ NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
         if (playback->queuedSeconds>.4 || gap>10) { [playback.player stop]; playback->decoder->reset(); playback->queuedSeconds=0; ++playback->generation; [playback.player play]; }
         else if (gap && gap<=10) {
             for (uint64_t i=0;i<gap;++i) {
-                AVAudioPCMBuffer *concealed=[[AVAudioPCMBuffer alloc] initWithPCMFormat:self->_format frameCapacity:480];
+                AVAudioPCMBuffer *concealed=[playback bufferWithFormat:self->_format];
+                if (!concealed) break;
                 auto decoded=(*playback->decoder)(mumble::Opus::FloatView(concealed.floatChannelData[0],480),{});
-                concealed.frameLength=(AVAudioFrameCount)decoded.size(); if (concealed.frameLength) [playback.player scheduleBuffer:concealed completionHandler:nil];
+                concealed.frameLength=(AVAudioFrameCount)decoded.size();
+                if (concealed.frameLength) [self scheduleBuffer:concealed forPlayback:playback duration:0];
+                else [playback recycleBuffer:concealed];
             }
         }
-        AVAudioPCMBuffer *buffer=[[AVAudioPCMBuffer alloc] initWithPCMFormat:self->_format frameCapacity:5760];
+        AVAudioPCMBuffer *buffer=[playback bufferWithFormat:self->_format];
+        if (!buffer) return;
         auto decoded=(*playback->decoder)(mumble::Opus::FloatView(buffer.floatChannelData[0],5760),MLBytes(data));
-        buffer.frameLength=(AVAudioFrameCount)decoded.size(); if (!buffer.frameLength) return;
+        buffer.frameLength=(AVAudioFrameCount)decoded.size(); if (!buffer.frameLength) { [playback recycleBuffer:buffer]; return; }
         playback->nextSequence=sequence+buffer.frameLength/480;
         double duration=buffer.frameLength/48000.0; playback->queuedSeconds+=duration;
-        NSUInteger generation=playback->generation;
-        [playback.player scheduleBuffer:buffer completionCallbackType:AVAudioPlayerNodeCompletionDataPlayedBack completionHandler:^(AVAudioPlayerNodeCompletionCallbackType type) {
-            dispatch_async(self->_queue, ^{ if (generation==playback->generation) playback->queuedSeconds=std::max(0.0,playback->queuedSeconds-duration); });
-        }];
+        [self scheduleBuffer:buffer forPlayback:playback duration:duration];
     });
+}
+- (void)scheduleBuffer:(AVAudioPCMBuffer *)buffer forPlayback:(MLPlayback *)playback duration:(double)duration {
+    NSUInteger generation=playback->generation;
+    [playback.player scheduleBuffer:buffer completionCallbackType:AVAudioPlayerNodeCompletionDataPlayedBack completionHandler:^(AVAudioPlayerNodeCompletionCallbackType type) {
+        dispatch_async(self->_queue, ^{
+            if (generation==playback->generation) playback->queuedSeconds=std::max(0.0,playback->queuedSeconds-duration);
+            [playback recycleBuffer:buffer];
+        });
+    }];
 }
 - (NSDictionary *)copyAudioOutputMixerDebugInfo {
     __block NSMutableArray *sources=[NSMutableArray array];

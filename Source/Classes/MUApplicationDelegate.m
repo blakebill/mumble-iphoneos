@@ -5,6 +5,7 @@
 #import "MUApplicationDelegate.h"
 
 #import "MUWelcomeScreenPhone.h"
+#import "MUInterface.h"
 #import "MUAppMenuViewController.h"
 #import "MUOnboardingViewController.h"
 #import "MUDatabase.h"
@@ -138,7 +139,8 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
 - (void)navigationController:(UINavigationController *)navigationController willShowViewController:(UIViewController *)viewController animated:(BOOL)animated {
     if (navigationController != _settingsNavigationController) return;
     BOOL isRoot = viewController == navigationController.viewControllers.firstObject;
-    viewController.navigationItem.largeTitleDisplayMode = isRoot ? UINavigationItemLargeTitleDisplayModeInline : UINavigationItemLargeTitleDisplayModeNever;
+    if (isRoot) MUApplyRootLargeTitle(viewController);
+    else viewController.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
     if (@available(iOS 27.0, *)) {
         UIBarMinimization *minimization = viewController.navigationItem.navigationBarMinimization;

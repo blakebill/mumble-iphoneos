@@ -5,6 +5,7 @@
 #import "MUServerRootViewController.h"
 #import "MUServerViewController.h"
 #import "MUMessagesViewController.h"
+#import "MUOnboardingViewController.h"
 
 @interface NSObject (DuoTests)
 - (void)serverModel:(MLServerModel *)model textMessageReceived:(MLTextMessage *)message fromUser:(MLUser *)user;
@@ -12,6 +13,8 @@
 - (void)updateSendButton;
 - (void)setAudioTransmitMethod:(NSString *)method;
 - (void)serverModel:(MLServerModel *)model channelAdded:(MLChannel *)channel;
+- (void)continueClicked:(id)sender;
+- (void)notify:(void (^)(id<MLServerModelDelegate>))block;
 @end
 static NSUInteger audioStarts;
 static void NoAudioStart(id self, SEL selector) { audioStarts++; }
@@ -20,6 +23,19 @@ static NSString *Path(NSString *name) {
 }
 static NSString *MUDuoRect(CGRect rect) { return NSStringFromCGRect(rect); }
 
+@interface MUDuoServerModel : MLServerModel
+@end
+@implementation MUDuoServerModel
+- (void)setSelfMuted:(BOOL)muted andSelfDeafened:(BOOL)deafened {
+    self.connectedUser.selfMuted = muted || deafened;
+    self.connectedUser.selfDeafened = deafened;
+    [self notify:^(id<MLServerModelDelegate> delegate) {
+        if ([delegate respondsToSelector:@selector(serverModel:userSelfMuteDeafenStateChanged:)])
+            [delegate serverModel:self userSelfMuteDeafenStateChanged:self.connectedUser];
+    }];
+}
+@end
+
 @interface MUDuoPresentationRoot : MUServerRootViewController
 @property(nonatomic, copy) NSArray<NSString *> *initialLayoutFailures;
 @end
@@ -27,8 +43,8 @@ static NSString *MUDuoRect(CGRect rect) { return NSStringFromCGRect(rect); }
 - (void)viewIsAppearing:(BOOL)animated {
     [super viewIsAppearing:animated];
     NSMutableArray *failures = [NSMutableArray array];
-    BOOL needsSide = self.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified ||
-        MIN(self.view.window.bounds.size.width, self.view.window.bounds.size.height) >= 600;
+    BOOL needsSide = self.traitCollection.verticalBarEdge == UIVerticalBarEdgeUnspecified &&
+        self.traitCollection.horizontalSizeClass == UIUserInterfaceSizeClassRegular;
     if (needsSide && ![[self valueForKey:@"_usingSideVoiceControls"] boolValue])
         [failures addObject:@"First appearance uses the compact voice controls before adapting"];
     for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
@@ -40,12 +56,59 @@ static NSString *MUDuoRect(CGRect rect) { return NSStringFromCGRect(rect); }
 }
 @end
 
+static void RunOnboarding(UIWindow *window) {
+    MUOnboardingViewController *welcome = [[MUOnboardingViewController alloc] initWithCompletion:^{}];
+    UINavigationController *navigation = [[UINavigationController alloc] initWithRootViewController:welcome];
+    window.rootViewController = navigation;
+    [window makeKeyAndVisible];
+    __block NSString *lastState;
+    [NSTimer scheduledTimerWithTimeInterval:.4 repeats:YES block:^(NSTimer *timer) {
+        @try {
+            NSString *command = [NSString stringWithContentsOfFile:Path(@"duo-command.txt") encoding:NSUTF8StringEncoding error:nil];
+            if (command.length) {
+                [NSFileManager.defaultManager removeItemAtPath:Path(@"duo-command.txt") error:nil];
+                if ([command isEqual:@"next"]) [(id)navigation.topViewController continueClicked:nil];
+                else if ([command isEqual:@"back"]) [navigation popViewControllerAnimated:YES];
+                else if ([command isEqual:@"large"]) navigation.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryAccessibilityExtraExtraExtraLarge;
+                else if ([command isEqual:@"standard"]) navigation.traitOverrides.preferredContentSizeCategory = UIContentSizeCategoryLarge;
+            }
+            MUOnboardingViewController *page = (id)navigation.topViewController;
+            if (![page isKindOfClass:MUOnboardingViewController.class]) return;
+            CGRect safe = [page.view convertRect:page.view.safeAreaLayoutGuide.layoutFrame toView:window];
+            CGRect table = [page.tableView convertRect:page.tableView.bounds toView:window];
+            UIView *footer = [page valueForKey:@"_footerStack"];
+            CGRect action = [footer convertRect:footer.bounds toView:window];
+            UIStackView *header = [page valueForKey:@"_headerStack"];
+            CGRect heading = [header convertRect:header.bounds toView:window];
+            NSMutableArray *failures = [NSMutableArray array];
+            if (!CGRectContainsRect(CGRectInset(safe, -1, -1), table)) [failures addObject:@"Setup table extends into the system bar/camera area"];
+            if (!CGRectContainsRect(CGRectInset(safe, -1, -1), action)) [failures addObject:@"Setup action is outside the content safe area"];
+            if (page.tableView.tableHeaderView && (CGRectGetMinX(heading) < CGRectGetMinX(safe) - 1 || CGRectGetMaxX(heading) > CGRectGetMaxX(safe) + 1)) [failures addObject:@"Setup heading extends underneath the vertical bar"];
+            if (!CGRectIsEmpty(CGRectIntersection(table, action))) [failures addObject:@"Setup action covers the scrollable options"];
+            if (action.size.width > 561) [failures addObject:@"Setup action stretches across the inner display"];
+            if (CGRectGetMaxY(action) > CGRectGetMaxY(safe) - 7 || CGRectGetMaxY(action) < CGRectGetMaxY(safe) - 9) [failures addObject:@"Setup action moved away from its bottom anchor"];
+            NSDictionary *state = @{@"setup":@YES, @"step":[page valueForKey:@"_step"], @"window":MUDuoRect(window.bounds), @"safe":MUDuoRect(safe), @"table":MUDuoRect(table), @"heading":MUDuoRect(heading), @"action":MUDuoRect(action), @"verticalBarEdge":@(navigation.traitCollection.verticalBarEdge), @"failures":failures};
+            NSData *data = [NSJSONSerialization dataWithJSONObject:state options:NSJSONWritingPrettyPrinted error:nil];
+            NSString *signature = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            if (![lastState isEqual:signature]) {
+                lastState = signature;
+                [data writeToFile:Path(@"duo-state.json") atomically:YES];
+                UIImage *snapshot = [[[UIGraphicsImageRenderer alloc] initWithBounds:window.bounds] imageWithActions:^(UIGraphicsImageRendererContext *context) { [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:NO]; }];
+                [UIImagePNGRepresentation(snapshot) writeToFile:Path(@"duo-layout.png") atomically:YES];
+            }
+        } @catch (NSException *exception) {
+            [exception.reason writeToFile:Path(@"duo-failure.txt") atomically:YES encoding:NSUTF8StringEncoding error:nil]; [timer invalidate];
+        }
+    }];
+}
+
 static void Run(void) {
     method_setImplementation(class_getInstanceMethod(MLAudio.class, @selector(start)), (IMP)NoAudioStart);
     UIWindowScene *scene = (id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;
     UIWindow *window = [(id)scene.delegate valueForKey:@"window"];
+    if ([NSProcessInfo.processInfo.environment[@"MU_DUO_TEST_ONBOARDING"] boolValue]) { RunOnboarding(window); return; }
     MLConnection *connection = [MLConnection new];
-    MLServerModel *model = [[MLServerModel alloc] initWithConnection:nil];
+    MLServerModel *model = [[MUDuoServerModel alloc] initWithConnection:nil];
     model.rootChannel.channelName = @"Mumble community";
     MLUser *me = [MLUser new]; me.session = 1; me.userName = @"Me"; me.channel = model.rootChannel;
     [[model.rootChannel valueForKey:@"userStorage"] addObject:me]; [model setValue:me forKey:@"_connectedUser"];
@@ -72,6 +135,7 @@ static void Run(void) {
     __block BOOL changedHiddenTree = NO;
     __block BOOL hiddenTreeCaughtUp = NO;
     __block CGRect systemKeyboardFrame = CGRectNull;
+    __block CGRect dockBeforeDirectionChange = CGRectNull;
     for (NSString *name in @[UIKeyboardWillChangeFrameNotification, UIKeyboardWillShowNotification, UIKeyboardWillHideNotification])
         [NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *notification) {
             systemKeyboardFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
@@ -106,6 +170,8 @@ static void Run(void) {
                     segments.selectedSegmentIndex = 0; [segments sendActionsForControlEvents:UIControlEventValueChanged];
                 } else if ([command isEqual:@"rtl"] || [command isEqual:@"ltr"]) {
                     [window endEditing:YES];
+                    UIView *dock = [server valueForKey:@"_voiceDock"];
+                    dockBeforeDirectionChange = [command isEqual:@"rtl"] && dock ? [dock convertRect:dock.bounds toView:window] : CGRectNull;
                     UISemanticContentAttribute direction = [command isEqual:@"rtl"] ? UISemanticContentAttributeForceRightToLeft : UISemanticContentAttributeForceLeftToRight;
                     UITraitEnvironmentLayoutDirection traitDirection = [command isEqual:@"rtl"] ? UITraitEnvironmentLayoutDirectionRightToLeft : UITraitEnvironmentLayoutDirectionLeftToRight;
                     window.traitOverrides.layoutDirection = traitDirection;
@@ -115,6 +181,8 @@ static void Run(void) {
                     [root.view setNeedsLayout];
                 } else if ([command isEqual:@"hold"]) {
                     UIButton *talk = [server valueForKey:@"_talkButton"]; [talk sendActionsForControlEvents:UIControlEventTouchDown];
+                } else if ([command isEqual:@"release"]) {
+                    UIButton *talk = [server valueForKey:@"_talkButton"]; [talk sendActionsForControlEvents:UIControlEventTouchUpInside];
                 } else if ([command isEqual:@"dismissKeyboard"]) [window endEditing:YES];
                 else if ([command isEqual:@"hiddenUpdate"] && CGRectIsEmpty(server.view.bounds)) {
                     MLChannel *room = [MLChannel new]; room.channelId = 50; room.channelName = @"Added while hidden"; room.parent = model.rootChannel;
@@ -136,23 +204,40 @@ static void Run(void) {
             if (!root.initialLayoutFailures) [failures addObject:@"Initial appearance was not checked"];
             [failures addObjectsFromArray:root.initialLayoutFailures ?: @[]];
             NSMutableArray *occlusions = [NSMutableArray array];
-            UIButton *sideMenu = [root valueForKey:@"_sideMenuButton"];
-            CGRect menuRect = sideMenu && !sideMenu.hidden ? [sideMenu convertRect:sideMenu.bounds toView:window] : CGRectZero;
             for (UIViewReservedRegion *region in [root.view reservedRegionsOfKind:UIViewReservedRegionKind.occlusionRegionKind]) {
                 CGRect rect = [root.view convertRect:region.frame toView:window];
                 [occlusions addObject:MUDuoRect(rect)];
                 if (!CGRectIsEmpty(CGRectIntersection(rect, dockRect))) [failures addObject:@"Voice controls overlap a camera or system occlusion"];
-                if (!CGRectIsEmpty(CGRectIntersection(rect, menuRect))) [failures addObject:@"Server menu overlaps a camera or system occlusion"];
             }
             BOOL sideVoiceControls = [[root valueForKey:@"_usingSideVoiceControls"] boolValue];
-            if (sideVoiceControls && root.traitCollection.verticalBarEdge == UIVerticalBarEdgeUnspecified) {
-                if (CGRectIsEmpty(menuRect) || fabs(CGRectGetMidX(menuRect) - CGRectGetMidX(dockRect)) > 1)
-                    [failures addObject:@"Portrait server menu is not in the right control rail"];
-                UIViewController *container = [root valueForKey:@"_conversationContainer"];
-                if (container.navigationItem.additionalOverflowItems) [failures addObject:@"Portrait has a duplicate navigation overflow menu"];
+            UIViewController *container = [root valueForKey:@"_conversationContainer"];
+            BOOL nativeVoiceControls = [[root valueForKey:@"_usingNativeVoiceControls"] boolValue];
+            BOOL nativePTT = nativeVoiceControls && [[NSUserDefaults.standardUserDefaults stringForKey:@"AudioTransmitMethod"] isEqualToString:@"ptt"];
+            if (root.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified &&
+                (!nativeVoiceControls || root.isToolbarHidden || container.toolbarItems.count != 2 || (dock && !nativePTT)))
+                [failures addObject:@"Vertical voice controls are missing from the system toolbar or duplicated in content"];
+            if (nativePTT && (!dock || ![server valueForKey:@"_talkButton"] || [server valueForKey:@"_speakerButton"]))
+                [failures addObject:@"Native mute controls lost their separate hold-to-speak target or duplicated the speaker button"];
+            if (!container.navigationItem.additionalOverflowItems)
+                [failures addObject:@"Server actions are missing from the native overflow menu"];
+            if (!wide && !folded && root.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified &&
+                (!container.navigationItem.rightBarButtonItem || container.navigationItem.titleView))
+                [failures addObject:@"Compact vertical navigation has no native Server/Messages switcher"];
+            if (sideVoiceControls) {
+                CGRect safe = [root.view convertRect:root.view.safeAreaLayoutGuide.layoutFrame toView:window];
+                if (!CGRectContainsRect(CGRectInset(safe, -1, -1), dockRect))
+                    [failures addObject:@"Custom voice controls intrude into the system navigation/status bar"];
+                BOOL onLeft = root.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified &&
+                    ((root.traitCollection.verticalBarEdge == UIVerticalBarEdgeLeading) !=
+                     (root.view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft));
+                if (onLeft ? CGRectGetMidX(dockRect) > CGRectGetMidX(safe) : CGRectGetMidX(dockRect) < CGRectGetMidX(safe))
+                    [failures addObject:@"Voice controls do not follow the system bar edge"];
             }
             if (sideVoiceControls && (!dock || !server.voiceControlsAtSide || !controls))
                 [failures addObject:@"Side voice controls disappear during a posture or pane change"];
+            if (sideVoiceControls && !CGRectIsNull(dockBeforeDirectionChange) &&
+                fabs(CGRectGetMidX(dockRect) - CGRectGetMidX(dockBeforeDirectionChange)) > 1)
+                [failures addObject:@"Changing reading direction moved controls away from the hardware-aligned bar"];
             if (sideVoiceControls && ![(UITextView *)[messages valueForKey:@"_textView"] isFirstResponder] && CGRectGetMinY(dockRect) < CGRectGetMidY([root.view convertRect:root.view.safeAreaLayoutGuide.layoutFrame toView:window]))
                 [failures addObject:@"Side voice controls moved into the upper half of the display"];
             if ([root valueForKey:@"_connection"] != connection || [root valueForKey:@"_model"] != model) [failures addObject:@"Connection/model replaced during layout"];
@@ -167,7 +252,8 @@ static void Run(void) {
             if (folded && (messages.view.hidden || CGRectIsEmpty(messages.view.bounds) || !CGRectIsEmpty(CGRectIntersection(messageContent, controlsRect)))) [failures addObject:@"Folded messages and controls overlap or disappear"];
             if (folded && (!dock || CGRectIsEmpty(controlsRect) || !CGRectIsEmpty(CGRectIntersection(serverRect, controlsRect)))) [failures addObject:@"Folded channels and controls overlap or disappear"];
             if (!wide && !folded && !(segments.selectedSegmentIndex == 1 ? messages.view.window : server.view.window)) [failures addObject:@"Compact content disappeared during reparenting"];
-            CGRect usable = [root.view convertRect:root.view.safeAreaLayoutGuide.layoutFrame toView:window];
+            UIViewController *arrangement = [root valueForKey:@"_arrangementController"];
+            CGRect usable = [arrangement.view convertRect:arrangement.view.bounds toView:window];
             if ([(UITextView *)[messages valueForKey:@"_textView"] isFirstResponder] && !CGRectIsNull(systemKeyboardFrame)) {
                 CGRect keyboard = [window convertRect:systemKeyboardFrame fromCoordinateSpace:window.windowScene.screen.coordinateSpace];
                 if (!CGRectIsEmpty(CGRectIntersection(usable, keyboard)) && keyboard.size.width >= usable.size.width * .5)
@@ -204,7 +290,7 @@ static void Run(void) {
                 }
                 if (!CGRectIsEmpty(CGRectIntersection(rect, dockRect))) [failures addObject:@"Voice controls cross the active fold"];
             }
-            if (wide) {
+            if (wide || folded) {
                 UIViewController *container = [root valueForKey:@"_conversationContainer"];
                 if (container.navigationItem.titleView) [failures addObject:@"Split panes retain a shared selector across the fold"];
                 UILabel *serverTitle = [server valueForKey:@"_paneTitleLabel"];
@@ -234,7 +320,10 @@ static void Run(void) {
             NSDictionary *state = @{@"verticalBarEdge":@(root.traitCollection.verticalBarEdge), @"serverVerticalBarEdge":@(server.traitCollection.verticalBarEdge), @"sideVoiceControls":@(sideVoiceControls), @"window":MUDuoRect(window.bounds), @"orientation":@(window.windowScene.effectiveGeometry.interfaceOrientation), @"safe":MUDuoRect(root.view.safeAreaLayoutGuide.layoutFrame), @"wide":@(wide), @"foldedControls":@(folded), @"book":@(book), @"rtl":@(root.view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft), @"controls":MUDuoRect(controlsRect), @"messagesHidden":@(messages.view.hidden), @"presented":@(root.presentingViewController != nil), @"server":MUDuoRect(serverRect), @"messages":MUDuoRect(messageRect), @"dock":MUDuoRect(dockRect), @"draft":@(armed), @"keyboardFrame":MUDuoRect(systemKeyboardFrame), @"rootKeyboardFrame":MUDuoRect(root.view.keyboardLayoutGuide.layoutFrame), @"messageKeyboardFrame":MUDuoRect(messages.view.keyboardLayoutGuide.layoutFrame), @"appState":@(UIApplication.sharedApplication.applicationState), @"sceneState":@(window.windowScene.activationState), @"rootHasKeyboardFrame":[root valueForKey:@"_hasKeyboardFrame"], @"selection":@(segments.selectedSegmentIndex), @"rows":@([[server valueForKey:@"_modelItems"] count]), @"forceTransmit":@(MLAudio.sharedAudio.forceTransmit), @"keyboard":@([(UITextView *)[messages valueForKey:@"_textView"] isFirstResponder]), @"failures":failures};
             NSMutableDictionary *geometry = [state mutableCopy];
             geometry[@"occlusions"] = occlusions;
-            geometry[@"sideMenu"] = MUDuoRect(menuRect);
+            geometry[@"nativeOverflow"] = @(container.navigationItem.additionalOverflowItems != nil);
+            geometry[@"nativeVoiceControls"] = @(nativeVoiceControls);
+            geometry[@"microphoneMuted"] = @(model.connectedUser.isSelfMuted);
+            geometry[@"speakerMuted"] = @(model.connectedUser.isSelfDeafened);
             NSData *json = [NSJSONSerialization dataWithJSONObject:geometry options:NSJSONWritingPrettyPrinted error:nil];
             NSString *signature = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
             if (![signature isEqual:lastState]) {

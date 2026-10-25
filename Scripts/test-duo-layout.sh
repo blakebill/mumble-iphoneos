@@ -20,7 +20,7 @@ xcrun simctl terminate "$device" "$bundle" >/dev/null 2>&1 || true
 xcrun simctl install "$device" "$fixture/Mumble.app"
 container="$(xcrun simctl get_app_container "$device" "$bundle" data)"
 rm -f "$container/Documents/duo-state.json" "$container/Documents/duo-failure.txt" "$container/Documents/duo-command.txt"
-SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$fixture/MUDuoLayoutTests.dylib" xcrun simctl launch "$device" "$bundle"
+SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$fixture/MUDuoLayoutTests.dylib" SIMCTL_CHILD_MU_DUO_TEST_ONBOARDING="${MU_DUO_TEST_ONBOARDING:-}" xcrun simctl launch "$device" "$bundle"
 printf 'Fixture data: %s/Documents\n' "$container"
 for attempt in {1..100}; do
     if [[ -f "$container/Documents/duo-state.json" ]]; then

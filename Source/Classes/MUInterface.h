@@ -1,6 +1,14 @@
 // Shared UIKit defaults for forms and ordinary settings/list cells.
 #import <UIKit/UIKit.h>
 
+static inline void MUApplyRootLargeTitle(UIViewController *controller) {
+    BOOL verticalBar = NO;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *))
+        verticalBar = controller.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified;
+#endif
+    controller.navigationItem.largeTitleDisplayMode = verticalBar ? UINavigationItemLargeTitleDisplayModeNever : UINavigationItemLargeTitleDisplayModeInline;
+}
 static inline void MUConfigureTable(UITableView *table) {
     table.rowHeight = UITableViewAutomaticDimension;
     table.estimatedRowHeight = 56;

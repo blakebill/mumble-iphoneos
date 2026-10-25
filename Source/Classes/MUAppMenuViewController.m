@@ -2,6 +2,7 @@
 
 #import "MUAppMenuViewController.h"
 #import "MUPreferencesViewController.h"
+#import "MUInterface.h"
 
 @interface MUAppMenuViewController () {
     MUPreferencesViewController *_preferences;
@@ -15,7 +16,7 @@
 - (id)init {
     if ((self = [super init])) {
         self.title = NSLocalizedString(@"Settings", nil);
-        self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeInline;
+        MUApplyRootLargeTitle(self);
     }
     return self;
 }
@@ -55,10 +56,24 @@
         [_versionLabel.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-24],
         [_versionLabel.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-16]
     ]];
+    [self setContentScrollView:_tableView forEdge:NSDirectionalRectEdgeTop];
+    [self updateRootLargeTitle];
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        [self registerForTraitChanges:UITraitCollection.systemTraitsAffectingVerticalBarEdge withHandler:^(__kindof MUAppMenuViewController *controller, UITraitCollection *previousTraits) {
+            [controller updateRootLargeTitle];
+        }];
+    }
+#endif
+}
+
+- (void)updateRootLargeTitle {
+    MUApplyRootLargeTitle(self);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self updateRootLargeTitle];
     [_tableView deselectRowAtIndexPath:_tableView.indexPathForSelectedRow animated:animated];
 }
 

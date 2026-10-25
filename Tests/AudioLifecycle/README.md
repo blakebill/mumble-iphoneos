@@ -13,6 +13,24 @@ counters. It
 does not connect to a server or use a microphone. No test code is loaded by the
 normal app.
 
+The capture-queue regression uses a fake input node and engine while running the
+real tap, pooled PCM handoff, converter and Opus encoder. It checks mute/unmute,
+retired callbacks, input-format changes and cancellation of the coalesced dispatch
+source. Speaking-state tests cover immediate activation, a 300 ms visual release
+delay, resumed speech, mute, lost terminators and model reset. Voice transmission
+does not wait for the visual delay.
+
+The standalone memory/FIFO tests need no Simulator or audio hardware:
+
+```sh
+bash Scripts/test-audio-buffers.sh
+```
+
+These verify four-buffer reuse over 100,000 callbacks, full-queue protection,
+oversized-buffer slicing, interleaved/planar stereo and concurrent producer/consumer
+ordering. Playback buffers are retained until playback completion and then reused;
+each source's free pool is capped at 24 buffers.
+
 Checks include duplicate starts, stop during activation, restart during activation,
 start during deactivation, interruptions with and without permission to resume,
 activation failure, configuration failure, late permission grants, and deactivation
@@ -25,14 +43,19 @@ session calls must never run on the main thread. On iOS 27 the asynchronous syst
 API must be used. Callback completion is deliberately delivered from a background
 queue. The script prints results and fails if a check fails or times out.
 
-To exercise the compiled compatibility branch on the same Simulator, build into a
-separate derived data directory with these additional build settings:
+To exercise the compiled compatibility branch on the same Simulator, create a
+temporary prefix header containing:
 
-```sh
-'GCC_PREPROCESSOR_DEFINITIONS=$(inherited) __IPHONE_OS_VERSION_MIN_REQUIRED=180000 __IPHONE_OS_VERSION_MAX_ALLOWED=260200'
+```objc
+#import <UIKit/UIKit.h>
+#undef __IPHONE_OS_VERSION_MAX_ALLOWED
+#define __IPHONE_OS_VERSION_MAX_ALLOWED 260200
 ```
 
-Then pass `legacy` as the second argument to the runner. In this mode the fake
+Build into a separate derived data directory with `GCC_PREFIX_HEADER` set to that
+header's absolute path and `GCC_PRECOMPILE_PREFIX_HEADER=NO`. Importing UIKit first
+prevents SDK imports from restoring the current version macro. Then pass `legacy`
+as the second argument to the runner. In this mode the fake
 synchronous APIs block the session queue until the test releases them, ensuring
 that the main thread remains available and ordering is preserved. This also
 checks that the older-SDK preprocessor guards compile without the new APIs.

@@ -2,6 +2,7 @@
 // Use of this source code is governed by the BSD-style license in LICENSE.
 
 #import "MUWelcomeScreenPhone.h"
+#import "MUInterface.h"
 #import "MUPublicServerListController.h"
 #import "MUFavouriteServerListController.h"
 #import "MULanServerListController.h"
@@ -32,7 +33,7 @@ static const NSUInteger MUHomeServerPreviewLimit = 5;
         _favouritesExpanded = YES;
         _pendingToggles = [NSMutableIndexSet indexSet];
         self.title = NSLocalizedString(@"Home", nil);
-        self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeInline;
+        MUApplyRootLargeTitle(self);
     }
     return self;
 }
@@ -44,6 +45,18 @@ static const NSUInteger MUHomeServerPreviewLimit = 5;
     self.tableView.estimatedRowHeight = 56;
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(appEnteredBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(appBecameActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [self updateRootLargeTitle];
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        [self registerForTraitChanges:UITraitCollection.systemTraitsAffectingVerticalBarEdge withHandler:^(__kindof MUWelcomeScreenPhone *controller, UITraitCollection *previousTraits) {
+            [controller updateRootLargeTitle];
+        }];
+    }
+#endif
+}
+
+- (void)updateRootLargeTitle {
+    MUApplyRootLargeTitle(self);
 }
 
 - (void)dealloc {
@@ -54,6 +67,7 @@ static const NSUInteger MUHomeServerPreviewLimit = 5;
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self updateRootLargeTitle];
     _homeVisible = YES;
     self.navigationController.toolbarHidden = YES;
     self.navigationItem.leftBarButtonItem = nil;

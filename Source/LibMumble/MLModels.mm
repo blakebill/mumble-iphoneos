@@ -188,6 +188,8 @@ static NSString *MLEscape(NSString *text) {
             if (message.has_self_mute()) user.selfMuted=message.self_mute();
             if (message.has_self_deaf()) user.selfDeafened=message.self_deaf();
             if (message.has_self_mute() || message.has_self_deaf()) MLNotify(serverModel:userSelfMuteDeafenStateChanged:, serverModel:self userSelfMuteDeafenStateChanged:user);
+            if (user.isMuted || user.isSelfMuted || user.isSuppressed || user.isDeafened || user.isSelfDeafened)
+                [self setTalkState:MLTalkStatePassive forSession:user.session];
             if (message.has_priority_speaker()) { user.prioritySpeaker=message.priority_speaker(); MLNotify(serverModel:userPrioritySpeakerChanged:, serverModel:self userPrioritySpeakerChanged:user); }
             if (message.has_recording()) { user.recording=message.recording(); MLNotify(serverModel:userRecordingStateChanged:, serverModel:self userRecordingStateChanged:user); }
             if (message.has_comment()) user.comment=MLString(message.comment());
@@ -202,6 +204,7 @@ static NSString *MLEscape(NSString *text) {
         case mumble::tcp::Message::Type::UserRemove: {
             MumbleTCP::UserRemove message; if (!message.ParseFromArray(data.bytes,(int)data.length) || !message.has_session()) return;
             MLUser *user=_users[@(message.session())], *actor=_users[@(message.actor())]; if (!user) return;
+            [_talkTimers[@(message.session())] invalidate]; [_talkTimers removeObjectForKey:@(message.session())];
             if (message.has_actor()) {
                 if (message.ban()) MLNotify(serverModel:userBanned:byUser:forReason:, serverModel:self userBanned:user byUser:actor forReason:MLString(message.reason()));
                 else MLNotify(serverModel:userKicked:byUser:forReason:, serverModel:self userKicked:user byUser:actor forReason:MLString(message.reason()));
@@ -233,30 +236,44 @@ static NSString *MLEscape(NSString *text) {
         default: break;
     }
 }
-- (void)setTalkState:(MLTalkState)state forSession:(NSUInteger)session {
-    MLUser *user=_users[@(session)]; if (!user || user.talkState==state) return;
+- (void)applyTalkState:(MLTalkState)state toUser:(MLUser *)user {
+    if (user.talkState==state) return;
     user.talkState=state; MLNotify(serverModel:userTalkStateChanged:, serverModel:self userTalkStateChanged:user);
+}
+- (void)scheduleTalkStopForUser:(MLUser *)user after:(NSTimeInterval)delay {
+    NSNumber *session=@(user.session);
+    NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:delay];
+    NSTimer *timer=_talkTimers[session];
+    if (timer) { timer.fireDate=deadline; return; }
+    __weak MLServerModel *weakSelf=self;
+    timer=[NSTimer timerWithTimeInterval:delay repeats:NO block:^(NSTimer *expired) {
+        MLServerModel *model=weakSelf;
+        if (!model || model->_talkTimers[session]!=expired) return;
+        [model->_talkTimers removeObjectForKey:session];
+        if ([model userWithSession:user.session]==user) [model applyTalkState:MLTalkStatePassive toUser:user];
+    }];
+    _talkTimers[session]=timer;
+    [NSRunLoop.mainRunLoop addTimer:timer forMode:NSRunLoopCommonModes];
+}
+- (void)setTalkState:(MLTalkState)state forSession:(NSUInteger)session {
+    NSAssert(NSThread.isMainThread, @"Speaking indicators run on the main thread");
+    MLUser *user=_users[@(session)]; if (!user) return;
+    BOOL muted=user.isMuted || user.isSelfMuted || user.isSuppressed || user.isDeafened || user.isSelfDeafened;
+    if (state==MLTalkStatePassive && !muted) {
+        if (user.talkState!=MLTalkStatePassive) [self scheduleTalkStopForUser:user after:.3];
+        return;
+    }
+    [_talkTimers[@(session)] invalidate]; [_talkTimers removeObjectForKey:@(session)];
+    [self applyTalkState:muted ? MLTalkStatePassive : state toUser:user];
 }
 - (void)receivedVoiceForSession:(NSUInteger)session talkState:(MLTalkState)state hasAudio:(BOOL)hasAudio terminator:(BOOL)terminator {
     NSAssert(NSThread.isMainThread, @"Speaking indicators run on the main thread");
     MLUser *user=_users[@(session)];
-    if (!user) return;
-    if (hasAudio) [self setTalkState:state forSession:session];
+    if (!user || user.isMuted || user.isSelfMuted || user.isSuppressed || user.isDeafened || user.isSelfDeafened) return;
+    if (hasAudio) [self applyTalkState:state toUser:user];
     if (user.talkState==MLTalkStatePassive) return;
     // Keep brief speech visible after the final packet; recover even if that packet is lost.
-    NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:terminator ? .35 : .8];
-    NSTimer *timer=_talkTimers[@(session)];
-    if (timer) { timer.fireDate=deadline; return; }
-    __weak MLServerModel *weakSelf=self;
-    timer=[NSTimer timerWithTimeInterval:1 repeats:NO block:^(NSTimer *expired) {
-        MLServerModel *model=weakSelf;
-        if (!model || model->_talkTimers[@(session)]!=expired) return;
-        [model->_talkTimers removeObjectForKey:@(session)];
-        if ([model userWithSession:session]==user) [model setTalkState:MLTalkStatePassive forSession:session];
-    }];
-    timer.fireDate=deadline;
-    _talkTimers[@(session)]=timer;
-    [NSRunLoop.mainRunLoop addTimer:timer forMode:NSRunLoopCommonModes];
+    [self scheduleTalkStopForUser:user after:terminator ? .3 : .8];
 }
 - (void)joinChannel:(MLChannel *)channel {
     if (!_connectedUser || !channel) return;

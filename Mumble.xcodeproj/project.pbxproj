@@ -7,29 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		6C9E5E1C48EA8D4BDF94303A /* App InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 69E1F121FF30BD1D7DD51485; };
-        A15000000000000000000023 /* MUOnboardingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000022 /* MUOnboardingViewController.m */; };
-        A15000000000000000000013 /* MUAboutViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000012 /* MUAboutViewController.m */; };
-        A15000000000000000000003 /* MUAppMenuViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000002 /* MUAppMenuViewController.m */; };
-		0E9B09F2304DCCE300682498 /* PBXBuildFile */ = {
-			isa = PBXBuildFile;
-			fileRef = 0E9B09E9304DCCE300682498;
-			settings = {
-				ATTRIBUTES = (
-					Weak,
-				);
-			};
-		};
+		0E9B09F2304DCCE300682498 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E9B09E9304DCCE300682498 /* WebKit.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		0EEEF3B42DF1E5450042C0A8 /* libFMDB-IOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0EEEF35C2DF1DC6D0042C0A8 /* libFMDB-IOS.a */; };
-		0EF3A4672DC2573900028454 /* PBXBuildFile */ = {
-			isa = PBXBuildFile;
-			fileRef = 2861C2AD116BE9B5002B8514;
-			settings = {
-				ATTRIBUTES = (
-					Weak,
-				);
-			};
-		};
+		0EF3A4672DC2573900028454 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2861C2AD116BE9B5002B8514 /* AudioToolbox.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		1D60589B0D05DD56006BFB54 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; };
 		2801C35B11CA9F1A00E664E8 /* MUPreferencesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2801C35A11CA9F1A00E664E8 /* MUPreferencesViewController.m */; };
 		280256381510D70D00178B08 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 280256361510D70D00178B08 /* Localizable.strings */; };
@@ -45,26 +25,14 @@
 		2838EA0F129316C200035C5D /* MUCertificatePreferencesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2838EA0E129316C200035C5D /* MUCertificatePreferencesViewController.m */; };
 		2858A5AD123BA08D00A82155 /* MUCertificateCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 2858A5AC123BA08D00A82155 /* MUCertificateCell.m */; };
 		285D6B7116BEEFA700F239EB /* MUTextMessageProcessor.m in Sources */ = {isa = PBXBuildFile; fileRef = 285D6B7016BEEFA700F239EB /* MUTextMessageProcessor.m */; };
-		2861C276116BE905002B8514 /* PBXBuildFile */ = {
-			isa = PBXBuildFile;
-			fileRef = 2861C25E116BE905002B8514;
-			settings = {
-				COMPILER_FLAGS = "-fno-autolink";
-			};
-		};
+		2861C276116BE905002B8514 /* MUApplicationDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 2861C25E116BE905002B8514 /* MUApplicationDelegate.m */; settings = {COMPILER_FLAGS = "-fno-autolink"; }; };
 		2861C27B116BE905002B8514 /* MUPublicServerList.m in Sources */ = {isa = PBXBuildFile; fileRef = 2861C267116BE905002B8514 /* MUPublicServerList.m */; };
 		2861C27C116BE905002B8514 /* MUPublicServerListController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2861C269116BE905002B8514 /* MUPublicServerListController.m */; };
 		2861C281116BE905002B8514 /* MUWelcomeScreenPhone.m in Sources */ = {isa = PBXBuildFile; fileRef = 2861C271116BE905002B8514 /* MUWelcomeScreenPhone.m */; };
 		286A3CA0158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 286A3C9F158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.m */; };
 		286E9260148452A000B13593 /* MUVoiceActivitySetupViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 286E925F148452A000B13593 /* MUVoiceActivitySetupViewController.m */; };
 		287639F911D29D99009DB8B6 /* MUCertificateCreationProgressView.m in Sources */ = {isa = PBXBuildFile; fileRef = 287639F811D29D99009DB8B6 /* MUCertificateCreationProgressView.m */; };
-		2879523714BF519A00567430 /* PBXBuildFile */ = {
-			isa = PBXBuildFile;
-			fileRef = 2879523614BF519A00567430;
-			settings = {
-				COMPILER_FLAGS = "-fno-autolink";
-			};
-		};
+		2879523714BF519A00567430 /* MUMessagesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2879523614BF519A00567430 /* MUMessagesViewController.m */; settings = {COMPILER_FLAGS = "-fno-autolink"; }; };
 		2879528114C2504C00567430 /* MUMessageBubbleTableViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 2879528014C2504C00567430 /* MUMessageBubbleTableViewCell.m */; };
 		287952B014C4D67500567430 /* MUMessageRecipientViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 287952AF14C4D67500567430 /* MUMessageRecipientViewController.m */; };
 		287A686F14C76E56008B1BE7 /* MUMessageAttachmentViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 287A686E14C76E56008B1BE7 /* MUMessageAttachmentViewController.m */; };
@@ -72,13 +40,7 @@
 		287BA33B11B97C470010E031 /* MUFavouriteServer.m in Sources */ = {isa = PBXBuildFile; fileRef = 287BA33A11B97C470010E031 /* MUFavouriteServer.m */; };
 		287BA34011B97EEE0010E031 /* MUFavouriteServerListController.m in Sources */ = {isa = PBXBuildFile; fileRef = 287BA33F11B97EEE0010E031 /* MUFavouriteServerListController.m */; };
 		287BA3A611B996D90010E031 /* MUFavouriteServerEditViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 287BA3A511B996D90010E031 /* MUFavouriteServerEditViewController.m */; };
-		28851B94147DC97E00088C4F /* PBXBuildFile */ = {
-			isa = PBXBuildFile;
-			fileRef = 28851B92147DC97D00088C4F;
-			settings = {
-				COMPILER_FLAGS = "-fno-autolink";
-			};
-		};
+		28851B94147DC97E00088C4F /* MULegalViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 28851B92147DC97D00088C4F /* MULegalViewController.m */; settings = {COMPILER_FLAGS = "-fno-autolink"; }; };
 		288B55E01252903300563A28 /* MUServerCertificateTrustViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 288B55DF1252903300563A28 /* MUServerCertificateTrustViewController.m */; };
 		288D6B60123D08EE00D37EDE /* MUCertificateViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 288D6B5F123D08EE00D37EDE /* MUCertificateViewController.m */; };
 		28942D7C12456F9200C63A07 /* MUCertificateCreationView.m in Sources */ = {isa = PBXBuildFile; fileRef = 28942D7B12456F9200C63A07 /* MUCertificateCreationView.m */; };
@@ -98,21 +60,19 @@
 		28F79C70147973D60003B8BA /* MUUserStateAcessoryView.m in Sources */ = {isa = PBXBuildFile; fileRef = 28F79C6F147973D50003B8BA /* MUUserStateAcessoryView.m */; };
 		28F79C73147991490003B8BA /* MUAccessTokenViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 28F79C72147991480003B8BA /* MUAccessTokenViewController.m */; };
 		28F79CA9147AB62B0003B8BA /* MUNotificationController.m in Sources */ = {isa = PBXBuildFile; fileRef = 28F79CA8147AB6280003B8BA /* MUNotificationController.m */; };
-		A18E5C010000000100A18E01 /* PBXBuildFile */ = {
-			isa = PBXBuildFile;
-			fileRef = A18E5C030000000100A18E01;
-		};
-		A18E5C040000000100A18E01 /* PBXBuildFile */ = {
-			isa = PBXBuildFile;
-			fileRef = A18E5C050000000100A18E01;
-		};
+		6C9E5E1C48EA8D4BDF94303A /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 69E1F121FF30BD1D7DD51485 /* InfoPlist.strings */; };
+		A15000000000000000000003 /* MUAppMenuViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000002 /* MUAppMenuViewController.m */; };
+		A15000000000000000000013 /* MUAboutViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000012 /* MUAboutViewController.m */; };
+		A15000000000000000000023 /* MUOnboardingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000022 /* MUOnboardingViewController.m */; };
+		A18E5C010000000100A18E01 /* MUSceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = A18E5C030000000100A18E01 /* MUSceneDelegate.m */; };
+		A18E5C040000000100A18E01 /* Source/PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A18E5C050000000100A18E01 /* Source/PrivacyInfo.xcprivacy */; };
 		A1B2C3D40000000000000068 /* MLModels.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000004 /* MLModels.mm */; };
 		A1B2C3D40000000000000069 /* MLCertificate.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000005 /* MLCertificate.mm */; };
 		A1B2C3D4000000000000006A /* MLConnection.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000006 /* MLConnection.mm */; };
 		A1B2C3D4000000000000006B /* MLAudio.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000007 /* MLAudio.mm */; };
 		A1B2C3D4000000000000006C /* MLServerPinger.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000008 /* MLServerPinger.mm */; };
-		A1B2C3D400000000000000C9 /* libmumble.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000C8 /* libmumble.xcframework */; };
-		A1C0F0000000000000000001 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0F0000000000000000002 /* AppIcon.icon */; };
+		A1B2C3D400000000000000C9 /* Dependencies/Generated/libmumble.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000C8 /* Dependencies/Generated/libmumble.xcframework */; };
+		A1C0F0000000000000000001 /* Resources/AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0F0000000000000000002 /* Resources/AppIcon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -182,43 +142,21 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		99CA9D5D45C925E4FA95E48F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "en"; path = "Resources/en.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		8457E91FC99E214646E64F62 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		0A7400A23453F15884B2FF7D /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		A2DA261E901C18BC6DC8E914 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "Resources/zh-Hant.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		BB371D2E835F83E2CB063B64 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "Resources/zh-Hant.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		C432766553F7FA3D6EEAFE52 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ja"; path = "Resources/ja.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		90F07D65278F455FC306BC99 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ja"; path = "Resources/ja.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		63E41634EEF3820DA81CD6B1 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ko"; path = "Resources/ko.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		C176B73963FEC92B812B99CB /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ko"; path = "Resources/ko.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		9F9A31652CFE46DB69EDE483 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "de"; path = "Resources/de.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		5F723DC62BA77D5250909D3D /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "de"; path = "Resources/de.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		DF89BE8B3E7BD80AB6918049 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "fr"; path = "Resources/fr.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		3C1307D965C70820CFA03560 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "fr"; path = "Resources/fr.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		00F3E7F83255D85038ECBFA3 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "es"; path = "Resources/es.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		F674C7AB2736F25D364033D0 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "es"; path = "Resources/es.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		0C8CA109A4FDA140EEB761F4 /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "Resources/pt-BR.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
+		00F3E7F83255D85038ECBFA3 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = Resources/es.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
 		06E21CAE8B3A2863AB8760AC /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "Resources/pt-BR.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		165F97981E3224DE9131E02D /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "it"; path = "Resources/it.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		9C3CA0868ABE520EF6B530EF /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "it"; path = "Resources/it.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		D96FA7394EBDA7FFF1131729 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ru"; path = "Resources/ru.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		0BAABAA8162B275B56730EB7 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "ru"; path = "Resources/ru.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-		2968D605B138A536E9172B35 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "da"; path = "Resources/da.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
-        A15000000000000000000021 /* MUOnboardingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUOnboardingViewController.h; sourceTree = "<group>"; };
-        A15000000000000000000022 /* MUOnboardingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUOnboardingViewController.m; sourceTree = "<group>"; };
-        A15000000000000000000011 /* MUAboutViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUAboutViewController.h; sourceTree = "<group>"; };
-        A15000000000000000000012 /* MUAboutViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUAboutViewController.m; sourceTree = "<group>"; };
-        A15000000000000000000001 /* MUAppMenuViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUAppMenuViewController.h; sourceTree = "<group>"; };
-        A15000000000000000000002 /* MUAppMenuViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUAppMenuViewController.m; sourceTree = "<group>"; };
+		0A7400A23453F15884B2FF7D /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
+		0BAABAA8162B275B56730EB7 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = Resources/ru.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		0C8CA109A4FDA140EEB761F4 /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "Resources/pt-BR.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
 		0E9B09E9304DCCE300682498 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		0EA3B0742DC3A75E00A69F03 /* fmdb.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = fmdb.xcodeproj; path = Dependencies/fmdb/fmdb.xcodeproj; sourceTree = "<group>"; };
+		165F97981E3224DE9131E02D /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = Resources/it.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
 		1D30AB110D05D00D00671497 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		1D6058910D05DD3D006BFB54 /* Mumble.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mumble.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1DF5F4DF0D08C38300B7A737 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		2801C35911CA9F1A00E664E8 /* MUPreferencesViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUPreferencesViewController.h; sourceTree = "<group>"; };
 		2801C35A11CA9F1A00E664E8 /* MUPreferencesViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUPreferencesViewController.m; sourceTree = "<group>"; };
-		280256371510D70D00178B08 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "en"; path = "Resources/en.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
-		2802563B1510DDCA00178B08 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "da"; path = "Resources/da.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
+		280256371510D70D00178B08 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = Resources/en.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		2802563B1510DDCA00178B08 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = da; path = Resources/da.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
 		2802ABFE14C9E948000983A5 /* MUDataURL.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUDataURL.h; sourceTree = "<group>"; };
 		2802ABFF14C9E948000983A5 /* MUDataURL.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUDataURL.m; sourceTree = "<group>"; };
 		2802AC0114CB0130000983A5 /* MUImage.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUImage.h; sourceTree = "<group>"; };
@@ -316,29 +254,27 @@
 		28F79C72147991480003B8BA /* MUAccessTokenViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUAccessTokenViewController.m; sourceTree = "<group>"; };
 		28F79CA7147AB6260003B8BA /* MUNotificationController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUNotificationController.h; sourceTree = "<group>"; };
 		28F79CA8147AB6280003B8BA /* MUNotificationController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUNotificationController.m; sourceTree = "<group>"; };
+		2968D605B138A536E9172B35 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = da; path = Resources/da.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
 		29B97316FDCFA39411CA2CEA /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = main.m; path = Source/main.m; sourceTree = "<group>"; };
 		32CA4F630368D1EE00C91783 /* Mumble.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Mumble.pch; path = Source/Mumble.pch; sourceTree = "<group>"; };
+		3C1307D965C70820CFA03560 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = Resources/fr.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		5F723DC62BA77D5250909D3D /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = Resources/de.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		63E41634EEF3820DA81CD6B1 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = Resources/ko.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		8457E91FC99E214646E64F62 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Source/Info.plist; plistStructureDefinitionIdentifier = "com.apple.xcode.plist.structure-definition.iphone.info-plist"; sourceTree = "<group>"; };
-		A18E5C050000000100A18E01 /* Source/PrivacyInfo.xcprivacy */ = {
-			path = Source/PrivacyInfo.xcprivacy;
-			isa = PBXFileReference;
-			lastKnownFileType = text.plist.xml;
-			sourceTree = "<group>";
-		};
-		A18E5C020000000100A18E01 /* MUSceneDelegate.h */ = {
-			path = MUSceneDelegate.h;
-			isa = PBXFileReference;
-			sourceTree = "<group>";
-			fileEncoding = 4;
-			lastKnownFileType = sourcecode.c.h;
-		};
-		A18E5C030000000100A18E01 /* MUSceneDelegate.m */ = {
-			path = MUSceneDelegate.m;
-			isa = PBXFileReference;
-			sourceTree = "<group>";
-			fileEncoding = 4;
-			lastKnownFileType = sourcecode.c.objc;
-		};
+		90F07D65278F455FC306BC99 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = Resources/ja.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		99CA9D5D45C925E4FA95E48F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = Resources/en.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		9C3CA0868ABE520EF6B530EF /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = Resources/it.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		9F9A31652CFE46DB69EDE483 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = Resources/de.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		A15000000000000000000001 /* MUAppMenuViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUAppMenuViewController.h; sourceTree = "<group>"; };
+		A15000000000000000000002 /* MUAppMenuViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUAppMenuViewController.m; sourceTree = "<group>"; };
+		A15000000000000000000011 /* MUAboutViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUAboutViewController.h; sourceTree = "<group>"; };
+		A15000000000000000000012 /* MUAboutViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUAboutViewController.m; sourceTree = "<group>"; };
+		A15000000000000000000021 /* MUOnboardingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUOnboardingViewController.h; sourceTree = "<group>"; };
+		A15000000000000000000022 /* MUOnboardingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUOnboardingViewController.m; sourceTree = "<group>"; };
+		A18E5C020000000100A18E01 /* MUSceneDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MUSceneDelegate.h; sourceTree = "<group>"; };
+		A18E5C030000000100A18E01 /* MUSceneDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MUSceneDelegate.m; sourceTree = "<group>"; };
+		A18E5C050000000100A18E01 /* Source/PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Source/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A1B2C3D40000000000000001 /* MLClient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MLClient.h; sourceTree = "<group>"; };
 		A1B2C3D40000000000000002 /* MLInternal.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = MLInternal.hpp; sourceTree = "<group>"; };
 		A1B2C3D40000000000000003 /* MLVoiceCrypt.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = MLVoiceCrypt.hpp; sourceTree = "<group>"; };
@@ -347,9 +283,16 @@
 		A1B2C3D40000000000000006 /* MLConnection.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = MLConnection.mm; sourceTree = "<group>"; };
 		A1B2C3D40000000000000007 /* MLAudio.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = MLAudio.mm; sourceTree = "<group>"; };
 		A1B2C3D40000000000000008 /* MLServerPinger.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = MLServerPinger.mm; sourceTree = "<group>"; };
-		A1B2C3D400000000000000C8 /* libmumble.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Dependencies/Generated/libmumble.xcframework; sourceTree = SOURCE_ROOT; };
+		A1B2C3D400000000000000C8 /* Dependencies/Generated/libmumble.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Dependencies/Generated/libmumble.xcframework; sourceTree = SOURCE_ROOT; };
+		A1C0F0000000000000000002 /* Resources/AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
+		A2DA261E901C18BC6DC8E914 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "Resources/zh-Hant.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
+		BB371D2E835F83E2CB063B64 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "Resources/zh-Hant.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
 		C0DE20261013000000000001 /* MUInterface.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUInterface.h; sourceTree = "<group>"; };
-		A1C0F0000000000000000002 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
+		C176B73963FEC92B812B99CB /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = Resources/ko.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		C432766553F7FA3D6EEAFE52 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = Resources/ja.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		D96FA7394EBDA7FFF1131729 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = Resources/ru.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		DF89BE8B3E7BD80AB6918049 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = Resources/fr.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		F674C7AB2736F25D364033D0 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = Resources/es.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -357,7 +300,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1B2C3D400000000000000C9 /* libmumble.xcframework in Frameworks */,
+				A1B2C3D400000000000000C9 /* Dependencies/Generated/libmumble.xcframework in Frameworks */,
 				0E9B09F2304DCCE300682498 /* WebKit.framework in Frameworks */,
 				0EF3A4672DC2573900028454 /* AudioToolbox.framework in Frameworks */,
 				0EEEF3B42DF1E5450042C0A8 /* libFMDB-IOS.a in Frameworks */,
@@ -368,83 +311,83 @@
 
 /* Begin PBXGroup section */
 		080E96DDFE201D6D7F000001 /* Classes */ = {
-			path = Source/Classes;
 			isa = PBXGroup;
-			name = Classes;
 			children = (
 				C0DE20261013000000000001 /* MUInterface.h */,
-                A15000000000000000000021 /* MUOnboardingViewController.h */,
-                A15000000000000000000022 /* MUOnboardingViewController.m */,
-                A15000000000000000000011 /* MUAboutViewController.h */,
-                A15000000000000000000012 /* MUAboutViewController.m */,
-                A15000000000000000000001 /* MUAppMenuViewController.h */,
-                A15000000000000000000002 /* MUAppMenuViewController.m */,
-				2872F7C4124668880078C0B1,
-				28BF8E1C11D93A1900B72770,
-				2838EA0C1293165700035C5D,
-				2861C25D116BE905002B8514,
-				2861C25E116BE905002B8514,
-				A18E5C020000000100A18E01,
-				A18E5C030000000100A18E01,
-				2861C25F116BE905002B8514,
-				28C6EF0911BBF38100E426C8,
-				2861C266116BE905002B8514,
-				2861C267116BE905002B8514,
-				2861C268116BE905002B8514,
-				2861C269116BE905002B8514,
-				2861C270116BE905002B8514,
-				2861C271116BE905002B8514,
-				287BA33E11B97EEE0010E031,
-				287BA33F11B97EEE0010E031,
-				287BA3A411B996D90010E031,
-				287BA3A511B996D90010E031,
-				289D254A11BC28BC00E39F2C,
-				289D254B11BC28BC00E39F2C,
-				288B55DE1252903300563A28,
-				288B55DF1252903300563A28,
-				28F0198F1364585B00E402F6,
-				28F019901364585B00E402F6,
-				280D9AD813EAFAAE003B64A0,
-				280D9AD913EAFAAE003B64A0,
-				289CBA16125693040015E58E,
-				289CBA17125693040015E58E,
-				28BE998618CFCDE600910551,
-				28BE998718CFCDE600910551,
-				28F79C6E147973D40003B8BA,
-				28F79C6F147973D50003B8BA,
-				28F79C71147991480003B8BA,
-				28F79C72147991480003B8BA,
-				28F79CA7147AB6260003B8BA,
-				28F79CA8147AB6280003B8BA,
-				28851B91147DC97D00088C4F,
-				28851B92147DC97D00088C4F,
-				28F08360147F263B00DC126F,
-				28F08361147F263B00DC126F,
-				28F08363147F369100DC126F,
-				28F08364147F369200DC126F,
-				2822AC0414878AC500E9DB17,
-				2822AC0514878AC500E9DB17,
-				2879523514BF519A00567430,
-				2879523614BF519A00567430,
-				2879527F14C2504B00567430,
-				2879528014C2504C00567430,
-				287952AE14C4D67500567430,
-				287952AF14C4D67500567430,
-				287A686D14C76E55008B1BE7,
-				287A686E14C76E56008B1BE7,
-				2802ABFE14C9E948000983A5,
-				2802ABFF14C9E948000983A5,
-				2802AC0114CB0130000983A5,
-				2802AC0214CB0131000983A5,
-				2802AC0414CB024A000983A5,
-				2802AC0514CB024A000983A5,
-				2802AC0B14CB2E2A000983A5,
-				2802AC0C14CB2E2B000983A5,
-				28EF155B14D8738C008A35A4,
-				28EF155C14D8738C008A35A4,
-				285D6B6F16BEEFA700F239EB,
-				285D6B7016BEEFA700F239EB,
+				A15000000000000000000021 /* MUOnboardingViewController.h */,
+				A15000000000000000000022 /* MUOnboardingViewController.m */,
+				A15000000000000000000011 /* MUAboutViewController.h */,
+				A15000000000000000000012 /* MUAboutViewController.m */,
+				A15000000000000000000001 /* MUAppMenuViewController.h */,
+				A15000000000000000000002 /* MUAppMenuViewController.m */,
+				2872F7C4124668880078C0B1 /* Certificates */,
+				28BF8E1C11D93A1900B72770 /* Database */,
+				2838EA0C1293165700035C5D /* Preferences */,
+				2861C25D116BE905002B8514 /* MUApplicationDelegate.h */,
+				2861C25E116BE905002B8514 /* MUApplicationDelegate.m */,
+				A18E5C020000000100A18E01 /* MUSceneDelegate.h */,
+				A18E5C030000000100A18E01 /* MUSceneDelegate.m */,
+				2861C25F116BE905002B8514 /* MUCountryServerListController.h */,
+				28C6EF0911BBF38100E426C8 /* MUCountryServerListController.m */,
+				2861C266116BE905002B8514 /* MUPublicServerList.h */,
+				2861C267116BE905002B8514 /* MUPublicServerList.m */,
+				2861C268116BE905002B8514 /* MUPublicServerListController.h */,
+				2861C269116BE905002B8514 /* MUPublicServerListController.m */,
+				2861C270116BE905002B8514 /* MUWelcomeScreenPhone.h */,
+				2861C271116BE905002B8514 /* MUWelcomeScreenPhone.m */,
+				287BA33E11B97EEE0010E031 /* MUFavouriteServerListController.h */,
+				287BA33F11B97EEE0010E031 /* MUFavouriteServerListController.m */,
+				287BA3A411B996D90010E031 /* MUFavouriteServerEditViewController.h */,
+				287BA3A511B996D90010E031 /* MUFavouriteServerEditViewController.m */,
+				289D254A11BC28BC00E39F2C /* MULanServerListController.h */,
+				289D254B11BC28BC00E39F2C /* MULanServerListController.m */,
+				288B55DE1252903300563A28 /* MUServerCertificateTrustViewController.h */,
+				288B55DF1252903300563A28 /* MUServerCertificateTrustViewController.m */,
+				28F0198F1364585B00E402F6 /* MUServerCell.h */,
+				28F019901364585B00E402F6 /* MUServerCell.m */,
+				280D9AD813EAFAAE003B64A0 /* MUServerRootViewController.h */,
+				280D9AD913EAFAAE003B64A0 /* MUServerRootViewController.m */,
+				289CBA16125693040015E58E /* MUServerViewController.h */,
+				289CBA17125693040015E58E /* MUServerViewController.m */,
+				28BE998618CFCDE600910551 /* MUServerTableViewCell.h */,
+				28BE998718CFCDE600910551 /* MUServerTableViewCell.m */,
+				28F79C6E147973D40003B8BA /* MUUserStateAcessoryView.h */,
+				28F79C6F147973D50003B8BA /* MUUserStateAcessoryView.m */,
+				28F79C71147991480003B8BA /* MUAccessTokenViewController.h */,
+				28F79C72147991480003B8BA /* MUAccessTokenViewController.m */,
+				28F79CA7147AB6260003B8BA /* MUNotificationController.h */,
+				28F79CA8147AB6280003B8BA /* MUNotificationController.m */,
+				28851B91147DC97D00088C4F /* MULegalViewController.h */,
+				28851B92147DC97D00088C4F /* MULegalViewController.m */,
+				28F08360147F263B00DC126F /* MUAudioBarView.h */,
+				28F08361147F263B00DC126F /* MUAudioBarView.m */,
+				28F08363147F369100DC126F /* MUAudioBarViewCell.h */,
+				28F08364147F369200DC126F /* MUAudioBarViewCell.m */,
+				2822AC0414878AC500E9DB17 /* MUConnectionController.h */,
+				2822AC0514878AC500E9DB17 /* MUConnectionController.m */,
+				2879523514BF519A00567430 /* MUMessagesViewController.h */,
+				2879523614BF519A00567430 /* MUMessagesViewController.m */,
+				2879527F14C2504B00567430 /* MUMessageBubbleTableViewCell.h */,
+				2879528014C2504C00567430 /* MUMessageBubbleTableViewCell.m */,
+				287952AE14C4D67500567430 /* MUMessageRecipientViewController.h */,
+				287952AF14C4D67500567430 /* MUMessageRecipientViewController.m */,
+				287A686D14C76E55008B1BE7 /* MUMessageAttachmentViewController.h */,
+				287A686E14C76E56008B1BE7 /* MUMessageAttachmentViewController.m */,
+				2802ABFE14C9E948000983A5 /* MUDataURL.h */,
+				2802ABFF14C9E948000983A5 /* MUDataURL.m */,
+				2802AC0114CB0130000983A5 /* MUImage.h */,
+				2802AC0214CB0131000983A5 /* MUImage.m */,
+				2802AC0414CB024A000983A5 /* MUImageViewController.h */,
+				2802AC0514CB024A000983A5 /* MUImageViewController.m */,
+				2802AC0B14CB2E2A000983A5 /* MUTextMessage.h */,
+				2802AC0C14CB2E2B000983A5 /* MUTextMessage.m */,
+				28EF155B14D8738C008A35A4 /* MUMessagesDatabase.h */,
+				28EF155C14D8738C008A35A4 /* MUMessagesDatabase.m */,
+				285D6B6F16BEEFA700F239EB /* MUTextMessageProcessor.h */,
+				285D6B7016BEEFA700F239EB /* MUTextMessageProcessor.m */,
 			);
+			name = Classes;
+			path = Source/Classes;
 			sourceTree = "<group>";
 		};
 		0EA3B0DF2DC3B60000A69F03 /* Products */ = {
@@ -543,22 +486,22 @@
 		};
 		28DC1C1213DE59120037CDC2 /* Resources */ = {
 			isa = PBXGroup;
-			name = Resources;
 			children = (
-				A1C0F0000000000000000002 /* AppIcon.icon */,
-				A18E5C050000000100A18E01,
+				A1C0F0000000000000000002 /* Resources/AppIcon.icon */,
+				A18E5C050000000100A18E01 /* Source/PrivacyInfo.xcprivacy */,
 				280256361510D70D00178B08 /* Localizable.strings */,
-				69E1F121FF30BD1D7DD51485 /* App InfoPlist.strings */,
-				28F0835E147F102F00DC126F,
-				28DC1C3A13DE596B0037CDC2,
-				28DC1C4913DE596B0037CDC2,
+				69E1F121FF30BD1D7DD51485 /* InfoPlist.strings */,
+				28F0835E147F102F00DC126F /* publist.xml */,
+				28DC1C3A13DE596B0037CDC2 /* Legal.html */,
+				28DC1C4913DE596B0037CDC2 /* README */,
 			);
+			name = Resources;
 			sourceTree = "<group>";
 		};
 		29B97314FDCFA39411CA2CEA /* CustomTemplate */ = {
 			isa = PBXGroup;
 			children = (
-				A1B2C3D400000000000000CA /* LibMumble */,
+				A1B2C3D400000000000000CA /* Source/LibMumble */,
 				2861C28C116BE90B002B8514 /* Dependencies */,
 				080E96DDFE201D6D7F000001 /* Classes */,
 				29B97315FDCFA39411CA2CEA /* Other Sources */,
@@ -591,7 +534,7 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		A1B2C3D400000000000000CA /* LibMumble */ = {
+		A1B2C3D400000000000000CA /* Source/LibMumble */ = {
 			isa = PBXGroup;
 			children = (
 				A1B2C3D40000000000000001 /* MLClient.h */,
@@ -602,7 +545,7 @@
 				A1B2C3D40000000000000006 /* MLConnection.mm */,
 				A1B2C3D40000000000000007 /* MLAudio.mm */,
 				A1B2C3D40000000000000008 /* MLServerPinger.mm */,
-				A1B2C3D400000000000000C8 /* libmumble.xcframework */,
+				A1B2C3D400000000000000C8 /* Dependencies/Generated/libmumble.xcframework */,
 			);
 			path = Source/LibMumble;
 			sourceTree = SOURCE_ROOT;
@@ -636,24 +579,24 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastTestingUpgradeCheck = 2700;
-				LastUpgradeCheck = 2700;
+				LastUpgradeCheck = 2710;
 			};
 			buildConfigurationList = C01FCF4E08A954540054247B /* Build configuration list for PBXProject "Mumble" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 1;
 			knownRegions = (
-				"en",
+				en,
 				"zh-Hans",
 				"zh-Hant",
-				"ja",
-				"ko",
-				"de",
-				"fr",
-				"es",
+				ja,
+				ko,
+				de,
+				fr,
+				es,
 				"pt-BR",
-				"it",
-				"ru",
-				"da",
+				it,
+				ru,
+				da,
 				Base,
 			);
 			mainGroup = 29B97314FDCFA39411CA2CEA /* CustomTemplate */;
@@ -732,85 +675,82 @@
 /* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
-		1D60588D0D05DD3D006BFB54 /* PBXResourcesBuildPhase */ = {
+		1D60588D0D05DD3D006BFB54 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1C0F0000000000000000001 /* AppIcon.icon in Resources */,
-				A18E5C040000000100A18E01,
-				28DC1C8313DE596B0037CDC2,
-				28F0835F147F102F00DC126F,
-				280256381510D70D00178B08,
-				6C9E5E1C48EA8D4BDF94303A /* App InfoPlist.strings in Resources */,
+				A1C0F0000000000000000001 /* Resources/AppIcon.icon in Resources */,
+				A18E5C040000000100A18E01 /* Source/PrivacyInfo.xcprivacy in Resources */,
+				28DC1C8313DE596B0037CDC2 /* Legal.html in Resources */,
+				28F0835F147F102F00DC126F /* publist.xml in Resources */,
+				280256381510D70D00178B08 /* Localizable.strings in Resources */,
+				6C9E5E1C48EA8D4BDF94303A /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
-		1D60588E0D05DD3D006BFB54 /* PBXSourcesBuildPhase */ = {
+		1D60588E0D05DD3D006BFB54 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-                A15000000000000000000013 /* MUAboutViewController.m in Sources */,
-                A15000000000000000000023 /* MUOnboardingViewController.m in Sources */,
-                A15000000000000000000003 /* MUAppMenuViewController.m in Sources */,
+				A15000000000000000000013 /* MUAboutViewController.m in Sources */,
+				A15000000000000000000023 /* MUOnboardingViewController.m in Sources */,
+				A15000000000000000000003 /* MUAppMenuViewController.m in Sources */,
 				A1B2C3D40000000000000068 /* MLModels.mm in Sources */,
 				A1B2C3D40000000000000069 /* MLCertificate.mm in Sources */,
 				A1B2C3D4000000000000006A /* MLConnection.mm in Sources */,
 				A1B2C3D4000000000000006B /* MLAudio.mm in Sources */,
 				A1B2C3D4000000000000006C /* MLServerPinger.mm in Sources */,
-				1D60589B0D05DD56006BFB54,
-				2861C276116BE905002B8514,
-				A18E5C010000000100A18E01,
-				2861C27B116BE905002B8514,
-				2861C27C116BE905002B8514,
-				2861C281116BE905002B8514,
-				287BA29011B96C960010E031,
-				287BA33B11B97C470010E031,
-				287BA34011B97EEE0010E031,
-				287BA3A611B996D90010E031,
-				28C6EF0A11BBF38100E426C8,
-				289D254C11BC28BC00E39F2C,
-				2801C35B11CA9F1A00E664E8,
-				287639F911D29D99009DB8B6,
-				2858A5AD123BA08D00A82155,
-				288D6B60123D08EE00D37EDE,
-				28942D7C12456F9200C63A07,
-				288B55E01252903300563A28,
-				289CBA18125693040015E58E,
-				2838EA0F129316C200035C5D,
-				282F6A2513620BD5008F555B,
-				28F019911364585C00E402F6,
-				28BF81D2139AFFD50078B722,
-				280D9ADA13EAFAAE003B64A0,
-				283363DB13EF154C00A04F04,
-				28F79C70147973D60003B8BA,
-				28F79C73147991490003B8BA,
-				28F79CA9147AB62B0003B8BA,
-				28851B94147DC97E00088C4F,
-				28F08362147F263C00DC126F,
-				28F08365147F369200DC126F,
-				286E9260148452A000B13593,
-				28BE998818CFCDE600910551,
-				2822AC0614878AC500E9DB17,
-				28F04B2214898A7100C90909,
-				28ADA303148A3E3B00C55E51,
-				2879523714BF519A00567430,
-				2879528114C2504C00567430,
-				287952B014C4D67500567430,
-				287A686F14C76E56008B1BE7,
-				2802AC0014C9E948000983A5,
-				2802AC0314CB0131000983A5,
-				2802AC0614CB024A000983A5,
-				2802AC0D14CB2E2B000983A5,
-				28EF155D14D8738C008A35A4,
-				2836767D1525053A0015958E,
-				286A3CA0158BB17E00C817D1,
-				285D6B7116BEEFA700F239EB,
+				1D60589B0D05DD56006BFB54 /* main.m in Sources */,
+				2861C276116BE905002B8514 /* MUApplicationDelegate.m in Sources */,
+				A18E5C010000000100A18E01 /* MUSceneDelegate.m in Sources */,
+				2861C27B116BE905002B8514 /* MUPublicServerList.m in Sources */,
+				2861C27C116BE905002B8514 /* MUPublicServerListController.m in Sources */,
+				2861C281116BE905002B8514 /* MUWelcomeScreenPhone.m in Sources */,
+				287BA29011B96C960010E031 /* MUDatabase.m in Sources */,
+				287BA33B11B97C470010E031 /* MUFavouriteServer.m in Sources */,
+				287BA34011B97EEE0010E031 /* MUFavouriteServerListController.m in Sources */,
+				287BA3A611B996D90010E031 /* MUFavouriteServerEditViewController.m in Sources */,
+				28C6EF0A11BBF38100E426C8 /* MUCountryServerListController.m in Sources */,
+				289D254C11BC28BC00E39F2C /* MULanServerListController.m in Sources */,
+				2801C35B11CA9F1A00E664E8 /* MUPreferencesViewController.m in Sources */,
+				287639F911D29D99009DB8B6 /* MUCertificateCreationProgressView.m in Sources */,
+				2858A5AD123BA08D00A82155 /* MUCertificateCell.m in Sources */,
+				288D6B60123D08EE00D37EDE /* MUCertificateViewController.m in Sources */,
+				28942D7C12456F9200C63A07 /* MUCertificateCreationView.m in Sources */,
+				288B55E01252903300563A28 /* MUServerCertificateTrustViewController.m in Sources */,
+				289CBA18125693040015E58E /* MUServerViewController.m in Sources */,
+				2838EA0F129316C200035C5D /* MUCertificatePreferencesViewController.m in Sources */,
+				282F6A2513620BD5008F555B /* MUCertificateController.m in Sources */,
+				28F019911364585C00E402F6 /* MUServerCell.m in Sources */,
+				28BF81D2139AFFD50078B722 /* MUCertificateDiskImportViewController.m in Sources */,
+				280D9ADA13EAFAAE003B64A0 /* MUServerRootViewController.m in Sources */,
+				283363DB13EF154C00A04F04 /* MUAudioTransmissionPreferencesViewController.m in Sources */,
+				28F79C70147973D60003B8BA /* MUUserStateAcessoryView.m in Sources */,
+				28F79C73147991490003B8BA /* MUAccessTokenViewController.m in Sources */,
+				28F79CA9147AB62B0003B8BA /* MUNotificationController.m in Sources */,
+				28851B94147DC97E00088C4F /* MULegalViewController.m in Sources */,
+				28F08362147F263C00DC126F /* MUAudioBarView.m in Sources */,
+				28F08365147F369200DC126F /* MUAudioBarViewCell.m in Sources */,
+				286E9260148452A000B13593 /* MUVoiceActivitySetupViewController.m in Sources */,
+				28BE998818CFCDE600910551 /* MUServerTableViewCell.m in Sources */,
+				2822AC0614878AC500E9DB17 /* MUConnectionController.m in Sources */,
+				28F04B2214898A7100C90909 /* MUAdvancedAudioPreferencesViewController.m in Sources */,
+				28ADA303148A3E3B00C55E51 /* MUAudioQualityPreferencesViewController.m in Sources */,
+				2879523714BF519A00567430 /* MUMessagesViewController.m in Sources */,
+				2879528114C2504C00567430 /* MUMessageBubbleTableViewCell.m in Sources */,
+				287952B014C4D67500567430 /* MUMessageRecipientViewController.m in Sources */,
+				287A686F14C76E56008B1BE7 /* MUMessageAttachmentViewController.m in Sources */,
+				2802AC0014C9E948000983A5 /* MUDataURL.m in Sources */,
+				2802AC0314CB0131000983A5 /* MUImage.m in Sources */,
+				2802AC0614CB024A000983A5 /* MUImageViewController.m in Sources */,
+				2802AC0D14CB2E2B000983A5 /* MUTextMessage.m in Sources */,
+				28EF155D14D8738C008A35A4 /* MUMessagesDatabase.m in Sources */,
+				2836767D1525053A0015958E /* MUCertificateChainBuilder.m in Sources */,
+				286A3CA0158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.m in Sources */,
+				285D6B7116BEEFA700F239EB /* MUTextMessageProcessor.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -825,25 +765,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
-		69E1F121FF30BD1D7DD51485 /* App InfoPlist.strings */ = {
-			isa = PBXVariantGroup;
-			children = (
-				99CA9D5D45C925E4FA95E48F /* en */,
-				0A7400A23453F15884B2FF7D /* zh-Hans */,
-				BB371D2E835F83E2CB063B64 /* zh-Hant */,
-				90F07D65278F455FC306BC99 /* ja */,
-				C176B73963FEC92B812B99CB /* ko */,
-				5F723DC62BA77D5250909D3D /* de */,
-				3C1307D965C70820CFA03560 /* fr */,
-				F674C7AB2736F25D364033D0 /* es */,
-				06E21CAE8B3A2863AB8760AC /* pt-BR */,
-				9C3CA0868ABE520EF6B530EF /* it */,
-				0BAABAA8162B275B56730EB7 /* ru */,
-				2968D605B138A536E9172B35 /* da */,
-			);
-			name = InfoPlist.strings;
-			sourceTree = "<group>";
-		};
 		280256361510D70D00178B08 /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -861,6 +782,25 @@
 				2802563B1510DDCA00178B08 /* da */,
 			);
 			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		69E1F121FF30BD1D7DD51485 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				99CA9D5D45C925E4FA95E48F /* en */,
+				0A7400A23453F15884B2FF7D /* zh-Hans */,
+				BB371D2E835F83E2CB063B64 /* zh-Hant */,
+				90F07D65278F455FC306BC99 /* ja */,
+				C176B73963FEC92B812B99CB /* ko */,
+				5F723DC62BA77D5250909D3D /* de */,
+				3C1307D965C70820CFA03560 /* fr */,
+				F674C7AB2736F25D364033D0 /* es */,
+				06E21CAE8B3A2863AB8760AC /* pt-BR */,
+				9C3CA0868ABE520EF6B530EF /* it */,
+				0BAABAA8162B275B56730EB7 /* ru */,
+				2968D605B138A536E9172B35 /* da */,
+			);
+			name = InfoPlist.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -892,11 +832,11 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 285E2A63150D729B008AE185 /* Debug.xcconfig */;
 			buildSettings = {
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				DEVELOPMENT_TEAM = J3TTEQJNML;
 				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 			};
 			name = Debug;
 		};
@@ -904,10 +844,10 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 285E2A64150D729B008AE185 /* Release.xcconfig */;
 			buildSettings = {
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				DEVELOPMENT_TEAM = J3TTEQJNML;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 			};
 			name = Release;
 		};
@@ -933,7 +873,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = 29B97313FDCFA39411CA2CEA /* Project object */;
 }

@@ -9,6 +9,8 @@
 @property(nonatomic, weak) UIView *voiceControlsHostView;
 @property(nonatomic) BOOL showsPaneTitle;
 @property(nonatomic) BOOL voiceControlsAtSide;
+@property(nonatomic) BOOL voiceControlsInToolbar;
+@property(nonatomic, readonly) NSArray<UIBarButtonItem *> *voiceControlBarItems;
 - (void)layoutVoiceControls;
 - (void)refreshVoiceControls;
 - (void)cancelPushToTalk;

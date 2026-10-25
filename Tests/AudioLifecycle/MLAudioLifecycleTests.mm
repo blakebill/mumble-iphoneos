@@ -12,6 +12,7 @@
 - (void)capture:(AVAudioPCMBuffer *)buffer;
 - (void)setLocalMuted:(BOOL)muted deafened:(BOOL)deafened;
 - (void)startEngineWithSettings:(MLAudioSettings)settings;
+- (AVAudioEngine *)makeAudioEngine;
 - (void)interrupted:(NSNotification *)notification;
 - (void)recoverStoppedEngine;
 - (void)engineStartupFailed:(NSError *)error;
@@ -23,6 +24,19 @@
 - (void)checkCaptureHealth;
 - (void)sessionBecameInactive:(NSNotification *)notification;
 - (void)sessionMayResume:(NSNotification *)notification;
+@end
+
+@interface MLServerModel (SpeakingTests)
+- (void)reset;
+- (void)setTalkState:(MLTalkState)state forSession:(NSUInteger)session;
+- (void)receivedVoiceForSession:(NSUInteger)session talkState:(MLTalkState)state hasAudio:(BOOL)hasAudio terminator:(BOOL)terminator;
+@end
+
+@interface NSObject (PlaybackBufferTests)
+- (AVAudioPCMBuffer *)bufferWithFormat:(AVAudioFormat *)format;
+- (void)recycleBuffer:(AVAudioPCMBuffer *)buffer;
+- (instancetype)initWithServerModel:(MLServerModel *)model;
+- (MLTalkState)talkStateForUser:(MLUser *)user;
 @end
 
 static NSMutableArray<NSString *> *results;
@@ -52,6 +66,7 @@ static BOOL Flag(MLAudio *audio, NSString *key) { return [[audio valueForKey:key
 @property(atomic) BOOL avoidsAlertInterruptions;
 @end
 @implementation MLTestSession
+- (AVAudioSessionCategoryOptions)categoryOptions { return _options; }
 - (BOOL)setCategory:(NSString *)category mode:(NSString *)mode options:(AVAudioSessionCategoryOptions)options error:(NSError **)error {
     Check(!NSThread.isMainThread,@"Session configuration blocked the main thread");
     self.category=category; self.mode=mode; self.options=options;
@@ -472,6 +487,132 @@ static void ConnectedInterruptionTests(Class test) {
         Cleanup(audio);
     } @finally { method_setImplementation(engine,previous); }
 }
+@interface MLCaptureTestInput : NSObject
+@property(nonatomic,strong) AVAudioFormat *format;
+@property(nonatomic,copy) AVAudioNodeTapBlock tap;
+@end
+@implementation MLCaptureTestInput
+- (AVAudioFormat *)outputFormatForBus:(AVAudioNodeBus)bus { return _format; }
+- (void)installTapOnBus:(AVAudioNodeBus)bus bufferSize:(AVAudioFrameCount)size format:(AVAudioFormat *)format block:(AVAudioNodeTapBlock)block { self.tap=block; }
+- (void)removeTapOnBus:(AVAudioNodeBus)bus { self.tap=nil; }
+@end
+@interface MLCaptureTestEngine : NSObject
+@property(nonatomic,strong) MLCaptureTestInput *inputNode;
+@property(nonatomic,strong) MLTestMixer *mainMixerNode;
+@property(nonatomic) BOOL autoShutdownEnabled;
+@property(nonatomic,getter=isRunning) BOOL running;
+@end
+@implementation MLCaptureTestEngine
+- (void)prepare {}
+- (BOOL)startAndReturnError:(NSError **)error { _running=YES; return YES; }
+- (void)stop { _running=NO; }
+@end
+static AVAudioFormat *testInputFormat;
+static id MakeCaptureTestEngine(id self, SEL selector) {
+    MLCaptureTestEngine *engine=[MLCaptureTestEngine new]; engine.inputNode=[MLCaptureTestInput new];
+    engine.inputNode.format=testInputFormat; engine.mainMixerNode=[MLTestMixer new]; return engine;
+}
+static uint64_t ReadCaptureCounter(MLAudio *audio, const char *name) {
+    Ivar field=class_getInstanceVariable(NSClassFromString(@"MLAudio"),name);
+    auto *counter=reinterpret_cast<std::atomic_uint64_t *>(reinterpret_cast<char *>((__bridge void *)audio)+ivar_getOffset(field));
+    return counter->load();
+}
+static void CaptureQueueTests(void) {
+    Class base=NSClassFromString(@"MLAudio"); Class test=objc_allocateClassPair(base,"MLCaptureQueueTestAudio",0);
+    class_addMethod(test,@selector(makeAudioEngine),(IMP)MakeCaptureTestEngine,method_getTypeEncoding(class_getInstanceMethod(base,@selector(makeAudioEngine))));
+    objc_registerClassPair(test);
+    MLAudio *audio=[test new]; MLAudioSettings settings; [audio readAudioSettings:&settings];
+    settings.transmitType=MLTransmitTypeContinuous; settings.enablePreprocessor=NO;
+    [audio updateAudioSettings:&settings];
+    MLTestCaptureConnection *connection=[MLTestCaptureConnection new];
+    [audio setMainConnectionForAudio:(MLConnection *)connection]; [audio copyAudioOutputMixerDebugInfo];
+    AVAudioFormat *mono=[[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32 sampleRate:48000 channels:1 interleaved:NO];
+    testInputFormat=mono; [audio startEngineWithSettings:settings];
+    MLCaptureTestEngine *engine=[audio valueForKey:@"_engine"];
+    AVAudioNodeTapBlock oldTap=engine.inputNode.tap;
+    AVAudioPCMBuffer *input=[[AVAudioPCMBuffer alloc] initWithPCMFormat:mono frameCapacity:960]; input.frameLength=960;
+    for (NSUInteger i=0;i<960;++i) input.floatChannelData[0][i]=.2;
+    AVAudioTime *time=[AVAudioTime timeWithSampleTime:0 atRate:48000];
+    oldTap(input,time);
+    Wait(^BOOL { return ReadCaptureCounter(audio,"_processedCount")>0; }); [audio copyAudioOutputMixerDebugInfo];
+    Check(connection.frames.count==1,@"Pooled tap did not deliver its PCM to the encoder");
+    [audio setLocalMuted:YES deafened:NO]; [audio copyAudioOutputMixerDebugInfo];
+    uint64_t processed=ReadCaptureCounter(audio,"_processedCount"), taps=ReadCaptureCounter(audio,"_tapCount");
+    oldTap(input,time); [audio copyAudioOutputMixerDebugInfo];
+    Check(ReadCaptureCounter(audio,"_tapCount")==taps+1 && ReadCaptureCounter(audio,"_processedCount")==processed,@"Muted capture stopped callbacks or retained DSP work");
+    [audio stop]; [audio copyAudioOutputMixerDebugInfo];
+    Check(!engine.inputNode.tap && [audio valueForKey:@"_captureSource"]==nil,@"Stop retained its input tap or pending capture source");
+    oldTap(input,time);
+    Check(ReadCaptureCounter(audio,"_tapCount")==taps+1,@"A retired tap processed input after stop");
+    [audio setLocalMuted:NO deafened:NO]; [audio copyAudioOutputMixerDebugInfo];
+    NSUInteger previousPackets=connection.frames.count;
+    testInputFormat=[[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32 sampleRate:44100 channels:2 interleaved:NO];
+    [audio startEngineWithSettings:settings];
+    MLCaptureTestEngine *replacement=[audio valueForKey:@"_engine"];
+    oldTap(input,time);
+    Check(ReadCaptureCounter(audio,"_tapCount")==taps+1,@"A retired tap entered the replacement input queue");
+    AVAudioPCMBuffer *stereo=[[AVAudioPCMBuffer alloc] initWithPCMFormat:testInputFormat frameCapacity:882]; stereo.frameLength=882;
+    for (NSUInteger c=0;c<2;++c) for (NSUInteger i=0;i<882;++i) stereo.floatChannelData[c][i]=.2;
+    time=[AVAudioTime timeWithSampleTime:0 atRate:44100];
+    replacement.inputNode.tap(stereo,time);
+    replacement.inputNode.tap(stereo,time);
+    Wait(^BOOL { return ReadCaptureCounter(audio,"_processedCount")>=processed+2; }); [audio copyAudioOutputMixerDebugInfo];
+    Check(audio.isRunning && connection.frames.count>previousPackets,@"Input-format change failed to rebuild capture buffers and resume encoding");
+    [audio stop]; testInputFormat=nil;
+    Record(@"pooled input reaches Opus; mute skips DSP; old taps cannot enter restarted or changed-format capture");
+
+    id playback=[NSClassFromString(@"MLPlayback") new];
+    AVAudioPCMBuffer *first=[playback bufferWithFormat:mono], *inUse=[playback bufferWithFormat:mono];
+    Check(first!=inUse,@"Playback reused a buffer while the player still owns it");
+    [playback recycleBuffer:first];
+    Check([playback bufferWithFormat:mono]==first,@"Completed playback buffers are not reused");
+    Record(@"playback buffers are reused only after returning to the free pool");
+}
+static void SpeakingIndicatorTests(void) {
+    MLServerModel *model=[[MLServerModel alloc] initWithConnection:nil];
+    MLUser *user=[MLUser new]; user.session=2;
+    [(NSMutableDictionary *)[model valueForKey:@"_users"] setObject:user forKey:@2];
+    [model setTalkState:MLTalkStateTalking forSession:2];
+    Check(user.talkState==MLTalkStateTalking,@"Local speech did not light its indicator immediately");
+    [model setTalkState:MLTalkStatePassive forSession:2];
+    [model setValue:user forKey:@"_connectedUser"];
+    MLAudioSettings original, ptt; [MLAudio.sharedAudio readAudioSettings:&original]; ptt=original; ptt.transmitType=MLTransmitTypeToggle;
+    [MLAudio.sharedAudio updateAudioSettings:&ptt]; MLAudio.sharedAudio.forceTransmit=NO;
+    id server=[[NSClassFromString(@"MUServerViewController") alloc] initWithServerModel:model];
+    Check([server talkStateForUser:user]==MLTalkStateTalking && !MLAudio.sharedAudio.forceTransmit,@"PTT release bypassed the visual hold or delayed actual transmission release");
+    [MLAudio.sharedAudio updateAudioSettings:&original];
+    NSDate *pause=[NSDate dateWithTimeIntervalSinceNow:.15];
+    while (pause.timeIntervalSinceNow>0) [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.005]];
+    Check(user.talkState==MLTalkStateTalking,@"A brief local speech gap immediately cleared the indicator");
+    [model setTalkState:MLTalkStateTalking forSession:2];
+    pause=[NSDate dateWithTimeIntervalSinceNow:.2];
+    while (pause.timeIntervalSinceNow>0) [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.005]];
+    Check(user.talkState==MLTalkStateTalking,@"The previous pause timer cleared resumed speech");
+    [model setTalkState:MLTalkStatePassive forSession:2];
+    Wait(^BOOL { return user.talkState==MLTalkStatePassive; });
+    [model receivedVoiceForSession:2 talkState:MLTalkStateTalking hasAudio:YES terminator:YES];
+    Check(user.talkState==MLTalkStateTalking,@"A short remote utterance was never displayed");
+    [model receivedVoiceForSession:2 talkState:MLTalkStateTalking hasAudio:NO terminator:YES];
+    pause=[NSDate dateWithTimeIntervalSinceNow:.15];
+    while (pause.timeIntervalSinceNow>0) [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.005]];
+    Check(user.talkState==MLTalkStateTalking,@"Remote stop bypassed the speaking hold interval");
+    [model receivedVoiceForSession:2 talkState:MLTalkStateShouting hasAudio:YES terminator:NO];
+    pause=[NSDate dateWithTimeIntervalSinceNow:.2];
+    while (pause.timeIntervalSinceNow>0) [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.005]];
+    Check(user.talkState==MLTalkStateShouting,@"An old remote stop timer cleared resumed speech");
+    [model receivedVoiceForSession:2 talkState:MLTalkStateShouting hasAudio:NO terminator:YES];
+    Wait(^BOOL { return user.talkState==MLTalkStatePassive; });
+    [model setTalkState:MLTalkStateTalking forSession:2]; user.selfMuted=YES;
+    [model setTalkState:MLTalkStatePassive forSession:2];
+    Check(user.talkState==MLTalkStatePassive,@"Mute left the speaking indicator active");
+    user.selfMuted=NO;
+    [model receivedVoiceForSession:2 talkState:MLTalkStateTalking hasAudio:YES terminator:NO];
+    Wait(^BOOL { return user.talkState==MLTalkStatePassive; });
+    [model setTalkState:MLTalkStateTalking forSession:2]; [model setTalkState:MLTalkStatePassive forSession:2];
+    [model reset];
+    Check(![model userWithSession:2] && ![(NSDictionary *)[model valueForKey:@"_talkTimers"] count],@"Disconnect retained speaking state or timers");
+    Record(@"speaking starts immediately, bridges short pauses, clears after silence/mute and cancels on reset");
+}
 static void RunTests(void) {
     results=[NSMutableArray array];
     legacy=getenv("ML_AUDIO_TEST_LEGACY")!=nullptr;
@@ -666,6 +807,8 @@ static void RunTests(void) {
         DeafenTests();
         CaptureHealthTests(test);
         ConnectedInterruptionTests(test);
+        CaptureQueueTests();
+        SpeakingIndicatorTests();
         [results addObject:@"ALL TESTS PASSED"];
     } @catch (NSException *error) {
         [results addObject:[NSString stringWithFormat:@"FAIL %@: %@",error.name,error.reason]];
