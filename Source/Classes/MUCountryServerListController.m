@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 #import "MUCountryServerListController.h"
+#import "MUInterface.h"
 
 #import "MUDatabase.h"
 #import "MUFavouriteServer.h"
@@ -124,13 +125,11 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     NSDictionary *serverItem = [_visibleServers objectAtIndex:[indexPath row]];
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    UIView *sourceView = [tableView cellForRowAtIndexPath:indexPath] ?: self.view;
 
     UIAlertController *sheetCtrl = [UIAlertController alertControllerWithTitle:[serverItem objectForKey:@"name"]
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
-    sheetCtrl.popoverPresentationController.sourceView = sourceView;
-    sheetCtrl.popoverPresentationController.sourceRect = sourceView.bounds;
+    MUConfigureServerActionSheet(sheetCtrl, [tableView cellForRowAtIndexPath:indexPath] ?: self.view);
 
     [sheetCtrl addAction: [UIAlertAction actionWithTitle:NSLocalizedString(@"Cancel", nil)
                                                    style:UIAlertActionStyleCancel

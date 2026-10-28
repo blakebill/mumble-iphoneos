@@ -107,6 +107,7 @@ static BOOL MUVoiceControlsOnLeft(UITraitCollection *traits, UIUserInterfaceLayo
 @end
 
 @interface MUServerRootViewController () <MLConnectionDelegate, MLServerModelDelegate> {
+    NSString *_reconnectStatus;
     MLConnection                *_connection;
     MLServerModel               *_model;
     
@@ -162,11 +163,6 @@ static BOOL MUVoiceControlsOnLeft(UITraitCollection *traits, UIUserInterfaceLayo
 - (void) dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_model removeDelegate:self];
-    [_connection setDelegate:nil];
-}
-
-- (void) takeOwnershipOfConnectionDelegate {
-    [_connection setDelegate:self];
 }
 
 #pragma mark - View lifecycle
@@ -594,6 +590,7 @@ static UIView *MUFirstResponderInView(UIView *view) {
 }
 
 - (void) applyNavigationItemsToViewController:(UIViewController *)controller {
+    controller.navigationItem.prompt=_reconnectStatus;
     controller.navigationItem.titleView = _segmentedControl;
     controller.navigationItem.leftBarButtonItem = _disconnectButton;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
@@ -621,7 +618,7 @@ static UIView *MUFirstResponderInView(UIView *view) {
     [alertCtrl addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Disconnect", nil)
                                                    style:UIAlertActionStyleDestructive
                                                  handler:^(UIAlertAction *action) {
-        [[MUConnectionController sharedController] disconnectFromServer];
+        [self requestDisconnectWithTitle:nil message:nil];
     }]];
     UIViewController *presenter = [self visibleViewController];
     if (presenter == nil) {
@@ -655,31 +652,20 @@ static UIView *MUFirstResponderInView(UIView *view) {
 
 #pragma mark - MLConnection delegate
 
-- (void) connectionOpened:(MLConnection *)conn {
+- (void)connection:(MLConnection *)connection willReconnectAfterDelay:(NSTimeInterval)delay attempt:(NSUInteger)attempt {
+    NSString *status=[NSString stringWithFormat:NSLocalizedString(@"Reconnecting… (attempt %lu)",nil),(unsigned long)attempt];
+    _reconnectStatus=status;self.topViewController.navigationItem.prompt=status;
+    [_messagesView setConnectionReconnecting:YES];
+    [_serverView cancelPushToTalk];
 }
-
-- (void) connection:(MLConnection *)conn rejectedWithReason:(MLRejectReason)reason explanation:(NSString *)explanation {
+- (void)connectionDidRestoreSession:(MLConnection *)connection {
+    _reconnectStatus=nil;self.topViewController.navigationItem.prompt=nil;
+    [_messagesView resetRecipientAfterReconnect];
+    [_serverView refreshVoiceControls];[MLAudio.sharedAudio resumeIfNeeded];
 }
-
-- (void) connection:(MLConnection *)conn trustFailureInCertificateChain:(NSArray *)chain {
-}
-
-- (void) connection:(MLConnection *)conn unableToConnectWithError:(NSError *)err {
-}
-
-- (void) connection:(MLConnection *)conn closedWithError:(NSError *)err {
-    if (err) {
-        UIAlertController *alertCtrl = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"Connection closed", nil)
-                                                                           message:[err localizedDescription]
-                                                                    preferredStyle:UIAlertControllerStyleAlert];
-        [alertCtrl addAction: [UIAlertAction actionWithTitle:NSLocalizedString(@"OK", nil)
-                                                       style:UIAlertActionStyleCancel
-                                                     handler:nil]];
-        
-        [self presentViewController:alertCtrl animated:YES completion:nil];
-
-        [[MUConnectionController sharedController] disconnectFromServer];
-    }
+- (void)requestDisconnectWithTitle:(NSString *)title message:(NSString *)message {
+    if(self.disconnectHandler)self.disconnectHandler(title,message);
+    else [[MUConnectionController sharedController]disconnectFromServer];
 }
 
 #pragma mark - MLServerModel delegate
@@ -692,16 +678,7 @@ static UIView *MUFirstResponderInView(UIView *view) {
                                 NSLocalizedString(@"Kicked by %@ for reason: \"%@\"", @"Kicked by user for reason"),
                                     [actor userName], reasonMsg];
         
-        UIAlertController *alertCtrl = [UIAlertController alertControllerWithTitle:title
-                                                                           message:alertMsg
-                                                                    preferredStyle:UIAlertControllerStyleAlert];
-        [alertCtrl addAction: [UIAlertAction actionWithTitle:NSLocalizedString(@"OK", nil)
-                                                       style:UIAlertActionStyleCancel
-                                                     handler:nil]];
-        
-        [self presentViewController:alertCtrl animated:YES completion:nil];
-        
-        [[MUConnectionController sharedController] disconnectFromServer];
+        [self requestDisconnectWithTitle:title message:alertMsg];
     }
 }
 
@@ -713,16 +690,7 @@ static UIView *MUFirstResponderInView(UIView *view) {
                                 NSLocalizedString(@"Banned by %@ for reason: \"%@\"", nil),
                                     [actor userName], reasonMsg];
         
-        UIAlertController *alertCtrl = [UIAlertController alertControllerWithTitle:title
-                                                                           message:alertMsg
-                                                                    preferredStyle:UIAlertControllerStyleAlert];
-        [alertCtrl addAction: [UIAlertAction actionWithTitle:NSLocalizedString(@"OK", nil)
-                                                       style:UIAlertActionStyleCancel
-                                                     handler:nil]];
-        
-        [self presentViewController:alertCtrl animated:YES completion:nil];
-        
-        [[MUConnectionController sharedController] disconnectFromServer];
+        [self requestDisconnectWithTitle:title message:alertMsg];
     }
 }
 

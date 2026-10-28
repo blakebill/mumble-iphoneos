@@ -71,9 +71,16 @@ bash Scripts/test-simulator.sh /tmp/mumble-tests/Build/Products/Debug-iphonesimu
 
 The runner creates and removes its own devices. It covers both audio-session
 paths, server trees, message storage and previews, interface behaviour, and
-single/dual-column resizing. Native Duo checks also run when a compatible
+single/dual-column resizing. The interface audit also checks real Keychain
+credential migration, cancellation of thumbnail prefetch, connection ownership,
+stale UI callbacks and reconnect draft preservation. Audio checks cover
+nonblocking graph transitions, bounded startup retries and settings races.
+Native Duo checks also run when a compatible
 Duo device type, runtime and SDK are installed. GitHub Actions retains test
 logs and screenshots for seven days.
+
+`bash Scripts/test-jitter-buffer.sh` runs deterministic packet ordering, delay
+adaptation, talkspurt restart and queue-bound checks without a Simulator.
 
 The GitHub Actions build uses GitHub's `xcode-27` preview image while Xcode 27
 is unavailable on the regular macOS images. The app's deployment target remains

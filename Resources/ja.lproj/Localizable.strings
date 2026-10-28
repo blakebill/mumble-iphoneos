@@ -242,7 +242,6 @@
 "Subject" = "サブジェクト";
 "Support" = "サポート";
 "TLS negotiation failed" = "TLS ネゴシエーションに失敗しました";
-"The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row." = "エラーのため TLS 接続が閉じられました。\n\n短時間に接続を繰り返したため、サーバーが一時的に接続を拒否している可能性があります。";
 "The certificate is protected by a password. Please enter it below:" = "この証明書はパスワードで保護されています。下に入力してください：";
 "The connection was interrupted" = "接続が中断されました";
 "The photo could not be loaded. Please try again." = "写真を読み込めませんでした。もう一度お試しください。";
@@ -301,3 +300,8 @@
 "Connect directly" = "直接接続";
 "Browse servers" = "サーバーを探す";
 "Recent" = "最近の接続";
+
+/* Connection recovery and credential storage */
+"The credentials could not be saved securely. Please try again." = "認証情報を安全に保存できませんでした。もう一度お試しください。";
+"Reconnecting… (attempt %lu)" = "再接続中…（%lu 回目）";
+"The server certificate changed. Reconnect manually to review it." = "サーバ証明書が変更されました。手動で再接続して確認してください。";

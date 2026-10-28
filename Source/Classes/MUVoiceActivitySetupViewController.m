@@ -47,7 +47,7 @@
 
 - (void) viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
-    if (![[MUConnectionController sharedController] isConnected]) {
+    if (![MUConnectionController sharedController].hasActiveSession) {
         [[MLAudio sharedAudio] stop];
     }
 }

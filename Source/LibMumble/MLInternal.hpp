@@ -17,6 +17,10 @@ inline mumble::BufViewConst MLBytes(NSData *data) {
 
 @interface MLConnection (Internal)
 - (void)sendProto:(const google::protobuf::Message &)message;
+- (void)restoreSessionForUser:(MLUser *)user;
+- (void)didRestoreSession;
+- (void)updateAccessTokens:(NSArray *)tokens;
+- (void)rememberSelfMuted:(BOOL)muted deafened:(BOOL)deafened;
 - (void)sendOpus:(NSData *)data sequence:(uint64_t)sequence terminator:(BOOL)terminator;
 @end
 @interface MLServerModel (Internal)

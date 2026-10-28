@@ -10,6 +10,7 @@
 @interface MUDatabase : NSObject
 
 + (void) initializeDatabase;
++ (void)migrateLegacyCredentials;
 
 // FavouriteServer
 + (void) storeFavourite:(MUFavouriteServer *)favServ;
@@ -23,7 +24,7 @@
 + (NSArray<MUFavouriteServer *> *)recentServers;
 + (void)deleteRecentServer:(MUFavouriteServer *)server;
 
-// Cert verification
+// Cert verification. DNS names match case-insensitively; ports remain distinct.
 + (void) storeDigest:(NSString *)hash forServerWithHostname:(NSString *)hostname port:(NSInteger)port;
 + (NSString *) digestForServerWithHostname:(NSString *)hostname port:(NSInteger)port;
 

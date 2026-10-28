@@ -15,6 +15,12 @@
 @end
 @implementation MUStoredMessage
 @end
+@interface MUPreviewRequest : NSObject
+@property(atomic) BOOL cancelled;
+@property(nonatomic) BOOL prefetch;
+@end
+@implementation MUPreviewRequest
+@end
 
 static UIImage *MUMessageThumbnail(NSData *data, NSUInteger edge, CGSize *originalSize) {
     CGImageSourceRef source=CGImageSourceCreateWithData((__bridge CFDataRef)data, (__bridge CFDictionaryRef)@{(__bridge NSString *)kCGImageSourceShouldCache:@NO});
@@ -51,11 +57,11 @@ static MUTextMessage *MUMessageWithImages(MUTextMessage *metadata, NSArray<UIIma
     FMDatabase *_db;
     NSMutableArray<MUStoredMessage *> *_records;
     NSCache<NSNumber *,MUTextMessage *> *_previewCache;
-    NSMutableSet<NSNumber *> *_loadingPreviews;
+    NSMutableDictionary<NSNumber *,MUPreviewRequest *> *_previewRequests;
 }
 - (id)init {
     if ((self=[super init])) {
-        _records=[NSMutableArray array];_loadingPreviews=[NSMutableSet set];
+        _records=[NSMutableArray array];_previewRequests=[NSMutableDictionary dictionary];
         _previewCache=[NSCache new];_previewCache.countLimit=128;_previewCache.totalCostLimit=24*1024*1024;
         _queue=dispatch_queue_create("info.mumble.messages",dispatch_queue_attr_make_with_autorelease_frequency(DISPATCH_QUEUE_SERIAL,DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM));
         NSString *path=[NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"msg-%@.db",NSUUID.UUID.UUIDString]];
@@ -115,22 +121,37 @@ static MUTextMessage *MUMessageWithImages(MUTextMessage *metadata, NSArray<UIIma
     NSDictionary *plist=data ? [NSPropertyListSerialization propertyListWithData:data options:0 format:nil error:nil] : nil;
     return plist[@"images"] ?: @[];
 }
-- (MUTextMessage *)messageAtIndex:(NSInteger)row {
+- (MUTextMessage *)messageAtIndex:(NSInteger)row {return [self messageAtIndex:row prefetch:NO];}
+- (void)prefetchMessagesAtIndexes:(NSIndexSet *)indexes {
+    __block NSUInteger count=0;
+    [indexes enumerateIndexesUsingBlock:^(NSUInteger row,BOOL *stop){[self messageAtIndex:(NSInteger)row prefetch:YES];*stop=++count>=16;}];
+}
+- (void)cancelPrefetchAtIndexes:(NSIndexSet *)indexes {
+    [indexes enumerateIndexesUsingBlock:^(NSUInteger row,BOOL *stop){
+        NSNumber *key=@(row);MUPreviewRequest *request=self->_previewRequests[key];
+        if(request.prefetch){request.cancelled=YES;[self->_previewRequests removeObjectForKey:key];}
+    }];
+}
+- (MUTextMessage *)messageAtIndex:(NSInteger)row prefetch:(BOOL)prefetch {
     NSAssert(NSThread.isMainThread,@"Message snapshots belong to the UI thread");
     if(row<0 || row>=(NSInteger)_records.count)return nil;
     MUStoredMessage *stored=_records[row];MUTextMessage *metadata=stored.metadata;
     if(!metadata)return nil;
     NSNumber *key=@(row);MUTextMessage *cached=[_previewCache objectForKey:key];
     if(cached)return cached;
-    if(metadata.embeddedImageSizes.count && ![_loadingPreviews containsObject:key]) {
-        [_loadingPreviews addObject:key];
+    MUPreviewRequest *pending=_previewRequests[key];
+    if(pending && !prefetch)pending.prefetch=NO;
+    if(metadata.embeddedImageSizes.count && !pending) {
+        MUPreviewRequest *request=[MUPreviewRequest new];request.prefetch=prefetch;_previewRequests[key]=request;
         dispatch_async(_queue, ^{
+            if(request.cancelled)return;
             NSArray *dataImages=[self imageDataForRecord:stored];NSMutableArray *previews=[NSMutableArray array];NSUInteger edge=MUThumbnailEdge(dataImages.count);
             for(NSData *data in dataImages){@autoreleasepool{UIImage *image=MUMessageThumbnail(data,edge,NULL);if(image)[previews addObject:image];}}
             MUTextMessage *display=MUMessageWithImages(metadata,previews);
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self->_loadingPreviews removeObject:key];
-                if(stored.metadata!=metadata)return;
+                if(self->_previewRequests[key]!=request)return;
+                [self->_previewRequests removeObjectForKey:key];
+                if(request.cancelled || stored.metadata!=metadata)return;
                 [self->_previewCache setObject:display forKey:key cost:MUMessageImageCost(display)];
                 if(self.messageDidLoad)self.messageDidLoad(row,display);
             });
@@ -142,6 +163,7 @@ static MUTextMessage *MUMessageWithImages(MUTextMessage *metadata, NSArray<UIIma
     NSAssert(NSThread.isMainThread,@"Message snapshots belong to the UI thread");
     if(row<0 || row>=(NSInteger)_records.count)return;
     MUStoredMessage *stored=_records[row];stored.metadata=nil;[_previewCache removeObjectForKey:@(row)];
+    _previewRequests[@(row)].cancelled=YES;[_previewRequests removeObjectForKey:@(row)];
     dispatch_async(_queue, ^{[self->_db executeUpdate:@"UPDATE msg SET plist=NULL WHERE id=?",@(stored.identifier)];stored.fallbackImages=nil;});
 }
 - (void)loadImagesAtIndex:(NSInteger)row completion:(void (^)(NSArray<UIImage *> *))completion {

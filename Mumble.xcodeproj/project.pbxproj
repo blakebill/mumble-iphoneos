@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3DBB6F3632592282635951E9 /* MUConnectionPresentation.m in Sources */ = {isa = PBXBuildFile; fileRef = 69B44537627BDB9E5C5CA418 /* MUConnectionPresentation.m */; };
+		23760E49BC4540BBA4834FE0 /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ECAB5B25D29742FBAB6BF8C1 /* Network.framework */; };
+		A51D8C993C49B1AAABC5F2AC /* MUCredentialStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 88231565FB357F7CC4EE5B28 /* MUCredentialStore.m */; };
 		0E9B09F2304DCCE300682498 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E9B09E9304DCCE300682498 /* WebKit.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		0EEEF3B42DF1E5450042C0A8 /* libFMDB-IOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0EEEF35C2DF1DC6D0042C0A8 /* libFMDB-IOS.a */; };
 		0EF3A4672DC2573900028454 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2861C2AD116BE9B5002B8514 /* AudioToolbox.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
@@ -142,6 +145,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		69B44537627BDB9E5C5CA418 /* MUConnectionPresentation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUConnectionPresentation.m; sourceTree = "<group>"; };
+		39D01DA6FE8EBDAB9E84BAD4 /* MUConnectionPresentation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUConnectionPresentation.h; sourceTree = "<group>"; };
+		ECAB5B25D29742FBAB6BF8C1 /* Network.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Network.framework; path = System/Library/Frameworks/Network.framework; sourceTree = SDKROOT; };
+		88231565FB357F7CC4EE5B28 /* MUCredentialStore.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUCredentialStore.m; sourceTree = "<group>"; };
+		50F96E27BD2433C66B65AB9F /* MUCredentialStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUCredentialStore.h; sourceTree = "<group>"; };
 		00F3E7F83255D85038ECBFA3 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = Resources/es.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
 		06E21CAE8B3A2863AB8760AC /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "Resources/pt-BR.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
 		0A7400A23453F15884B2FF7D /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
@@ -302,6 +310,7 @@
 			files = (
 				A1B2C3D400000000000000C9 /* Dependencies/Generated/libmumble.xcframework in Frameworks */,
 				0E9B09F2304DCCE300682498 /* WebKit.framework in Frameworks */,
+				23760E49BC4540BBA4834FE0 /* Network.framework in Frameworks */,
 				0EF3A4672DC2573900028454 /* AudioToolbox.framework in Frameworks */,
 				0EEEF3B42DF1E5450042C0A8 /* libFMDB-IOS.a in Frameworks */,
 			);
@@ -380,6 +389,10 @@
 				2802AC0414CB024A000983A5 /* MUImageViewController.h */,
 				2802AC0514CB024A000983A5 /* MUImageViewController.m */,
 				2802AC0B14CB2E2A000983A5 /* MUTextMessage.h */,
+				69B44537627BDB9E5C5CA418 /* MUConnectionPresentation.m */,
+				39D01DA6FE8EBDAB9E84BAD4 /* MUConnectionPresentation.h */,
+				88231565FB357F7CC4EE5B28 /* MUCredentialStore.m */,
+				50F96E27BD2433C66B65AB9F /* MUCredentialStore.h */,
 				2802AC0C14CB2E2B000983A5 /* MUTextMessage.m */,
 				28EF155B14D8738C008A35A4 /* MUMessagesDatabase.h */,
 				28EF155C14D8738C008A35A4 /* MUMessagesDatabase.m */,
@@ -527,6 +540,7 @@
 			isa = PBXGroup;
 			children = (
 				0E9B09E9304DCCE300682498 /* WebKit.framework */,
+				ECAB5B25D29742FBAB6BF8C1 /* Network.framework */,
 				2861C2AD116BE9B5002B8514 /* AudioToolbox.framework */,
 				1DF5F4DF0D08C38300B7A737 /* UIKit.framework */,
 				1D30AB110D05D00D00671497 /* Foundation.framework */,
@@ -747,6 +761,8 @@
 				2802AC0314CB0131000983A5 /* MUImage.m in Sources */,
 				2802AC0614CB024A000983A5 /* MUImageViewController.m in Sources */,
 				2802AC0D14CB2E2B000983A5 /* MUTextMessage.m in Sources */,
+				3DBB6F3632592282635951E9 /* MUConnectionPresentation.m in Sources */,
+				A51D8C993C49B1AAABC5F2AC /* MUCredentialStore.m in Sources */,
 				28EF155D14D8738C008A35A4 /* MUMessagesDatabase.m in Sources */,
 				2836767D1525053A0015958E /* MUCertificateChainBuilder.m in Sources */,
 				286A3CA0158BB17E00C817D1 /* MUAudioSidetonePreferencesViewController.m in Sources */,

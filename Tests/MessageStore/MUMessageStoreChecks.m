@@ -9,6 +9,7 @@
 
 @interface MUMessagesViewController (MessageStoreChecks)
 - (void)serverModel:(MLServerModel *)model textMessageReceived:(MLTextMessage *)message fromUser:(MLUser *)user;
+- (void)sendMessage:(id)sender;
 @end
 static void Check(BOOL condition,NSString *message){if(!condition)@throw [NSException exceptionWithName:@"MessageStoreFailure" reason:message userInfo:nil];}
 static void Wait(BOOL (^ready)(void)){
@@ -55,6 +56,23 @@ void MUMessageStoreChecks(UIWindow *window,NSMutableArray<NSString *> *results){
 
     release=dispatch_semaphore_create(0);entered=dispatch_semaphore_create(0);
     dispatch_async(queue,^{dispatch_semaphore_signal(entered);dispatch_semaphore_wait(release,dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC));});
+    Check(dispatch_semaphore_wait(entered,dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC))==0,@"Prefetch fixture did not block I/O");
+    @try{
+        [cache removeAllObjects];__block BOOL loaded=NO;
+        store.messageDidLoad=^(NSInteger row,MUTextMessage *message){loaded=YES;};
+        [store prefetchMessagesAtIndexes:[NSIndexSet indexSetWithIndex:0]];
+        [store cancelPrefetchAtIndexes:[NSIndexSet indexSetWithIndex:0]];
+        Check([[store valueForKey:@"_previewRequests"]count]==0 && !loaded,@"Cancelled prefetch retains a pending preview request");
+        [store prefetchMessagesAtIndexes:[NSIndexSet indexSetWithIndex:0]];
+        [store messageAtIndex:0]; // A visible cell now owns this request.
+        [store cancelPrefetchAtIndexes:[NSIndexSet indexSetWithIndex:0]];
+        dispatch_semaphore_signal(release);Wait(^BOOL{return loaded;});
+        Check([store messageAtIndex:0].embeddedImages.count==1,@"Cancelling prefetch discards a now-visible image");
+    }@finally{dispatch_semaphore_signal(release);}
+    [results addObject:@"PASS cancellable background thumbnail prefetch and promotion of visible rows"];
+
+    release=dispatch_semaphore_create(0);entered=dispatch_semaphore_create(0);
+    dispatch_async(queue,^{dispatch_semaphore_signal(entered);dispatch_semaphore_wait(release,dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC));});
     Check(dispatch_semaphore_wait(entered,dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC))==0,@"Message worker did not enter deletion fixture");
     @try{
         [cache removeAllObjects];__block BOOL stale=NO,drained=NO;
@@ -82,6 +100,13 @@ void MUMessageStoreChecks(UIWindow *window,NSMutableArray<NSString *> *results){
     [conversation clearAllMessages];
     __block BOOL finished=NO;[current addMessage:[MLTextMessage messageWithPlainText:@"Barrier"] withHeading:@"Audit" andSentBySelf:NO completion:^{finished=YES;}];Wait(^BOOL{return finished;});
     Check([[conversation valueForKey:@"_msgdb"]count]==0 && [table numberOfRowsInSection:0]==0,@"Clearing history applies a completion from the old store");
+    UITextView *composer=[conversation valueForKey:@"_textView"];composer.text=@"Keep this draft";
+    [conversation setConnectionReconnecting:YES];[conversation sendMessage:nil];
+    Check([composer.text isEqual:@"Keep this draft"] && ![(UIButton *)[conversation valueForKey:@"_sendButton"]isEnabled],@"Reconnecting sends or clears the draft");
+    [conversation setValue:[MLUser new] forKey:@"_user"];
+    [conversation resetRecipientAfterReconnect];
+    Check([composer.text isEqual:@"Keep this draft"] && ![conversation valueForKey:@"_user"],@"Reconnection loses a draft or retains an old session's recipient");
     [results addObject:@"PASS early-message batch updates and clear-history generation guards"];
+    [results addObject:@"PASS reconnect preserves drafts and clears recipients tied to an old session"];
     window.rootViewController=[UIViewController new];
 }

@@ -1,4 +1,6 @@
 #import <UIKit/UIKit.h>
+void MUCredentialStoreChecks(NSMutableArray<NSString *> *results);
+void MUConnectionLifecycleChecks(UIWindow *window,NSMutableArray<NSString *> *results);
 #import <objc/runtime.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "MLClient.h"
@@ -128,7 +130,7 @@ static void PasswordConnectionChecks(UIWindow *window) {
   [controller disconnectFromServer];Wait(.6);
   [controller connectToFavouriteServer:first withParentViewController:parent];connection=[controller valueForKey:@"_connection"];[(id)controller connection:connection rejectedWithReason:MLRejectReasonWrongUserPassword explanation:nil];alert=WaitForPasswordPrompt(parent,controller);Save(window,@"native-server-password-prompt.png");InvokeAlertAction(alert.actions[0]);
   Check(!controller.isConnected && ![[controller valueForKey:@"_savePasswordOnJoin"]boolValue] && [controller valueForKey:@"_rejectAlertCtrl"]==nil,@"Cancel retains a retry or save request");
-  DismissSheet(parent);
+  Wait(.5);Check(!parent.presentedViewController,@"Cancelling authentication leaves its prompt on screen");
   [results addObject:@"PASS immediate password rejection, secure prompt, empty-input guard, wrong-password retry, authenticated exact-favourite save, Connect Once and Cancel"];
  } @finally {
   [controller disconnectFromServer];if(parent.presentedViewController)[parent dismissViewControllerAnimated:NO completion:nil];Wait(.2);window.rootViewController=[UIViewController new];
@@ -364,6 +366,14 @@ static void TransmissionChecks(UIWindow *window) {
 static void MenuChecks(UIWindow *window) {
  MLServerModel *model=[[MLServerModel alloc]initWithConnection:nil];MLUser *user=[MLUser new];user.session=1;user.userName=@"Me";user.channel=model.rootChannel;[[model.rootChannel valueForKey:@"userStorage"]addObject:user];[model setValue:user forKey:@"_connectedUser"];
  MUServerRootViewController *server=[[MUServerRootViewController alloc]initWithConnection:nil andServerModel:model];window.rootViewController=server;Wait(.2);UISegmentedControl *segments=[server valueForKey:@"_segmentedControl"];for(int i=0;i<3;i++)[(id)server serverModel:model textMessageReceived:[MLTextMessage messageWithPlainText:@"Sample"]fromUser:user];Check([[segments titleForSegmentAtIndex:1]containsString:@"3"],@"Native segment does not announce unread count");UIBarButtonItem *disconnect=[server valueForKey:@"_disconnectButton"];Check(disconnect.customView==nil,@"Disconnect is still a undersized custom bar button");segments.selectedSegmentIndex=1;[segments sendActionsForControlEvents:UIControlEventValueChanged];Wait(.2);Check([[segments titleForSegmentAtIndex:1]isEqual:NSLocalizedString(@"Messages",nil)],@"Unread count does not clear when opening messages");
+ UIViewController *messages=[server valueForKey:@"_messagesView"];UITextView *draft=[messages valueForKey:@"_textView"];draft.text=@"Draft survives reconnect";
+ [(id<MLConnectionDelegate>)server connection:nil willReconnectAfterDelay:.5 attempt:1];Wait(.1);
+ Check(server.topViewController.navigationItem.prompt.length>0 && ![(UIButton *)[messages valueForKey:@"_sendButton"]isEnabled],@"Reconnecting lacks progress or permits sending a draft");
+ segments.selectedSegmentIndex=0;[segments sendActionsForControlEvents:UIControlEventValueChanged];Wait(.1);
+ Check(server.topViewController.navigationItem.prompt.length>0,@"Switching panes hides reconnect progress");Save(window,@"reconnecting-progress.png");
+ [(id<MLConnectionDelegate>)server connectionDidRestoreSession:nil];Wait(.1);
+ Check(!server.topViewController.navigationItem.prompt && [draft.text isEqual:@"Draft survives reconnect"],@"Restored connection retains stale progress or loses the draft");
+ [results addObject:@"PASS native reconnect progress across pane switches and preserved draft on restore"];
  UIViewController *files=[NSClassFromString(@"MUCertificateDiskImportViewController")new];UINavigationController *nav=Show(window,files);[(id)files importFromFiles:nil];NSDate *pickerEnd=[NSDate dateWithTimeIntervalSinceNow:8];while(!files.presentedViewController && !nav.presentedViewController && pickerEnd.timeIntervalSinceNow>0)Wait(.05);Wait(.3);[results addObject:[NSString stringWithFormat:@"Files presentation: %@ / %@",files.presentedViewController,nav.presentedViewController]];Check([(files.presentedViewController ?: nav.presentedViewController)isKindOfClass:UIDocumentPickerViewController.class],@"Import does not use native Files picker");[nav dismissViewControllerAnimated:NO completion:nil];Wait(.2);
  UIViewController *blank=[UIViewController new];nav=Show(window,blank);MUNotificationController *notice=[MUNotificationController new];[notice addNotification:@"The server denied this action." fromViewController:blank];Wait(.3);UIAlertController *alert=(id)(nav.presentedViewController ?: blank.presentedViewController);Check([alert isKindOfClass:UIAlertController.class] && alert.preferredStyle==UIAlertControllerStyleAlert && alert.actions.count==1,@"Server notice is still a disappearing custom overlay");[nav dismissViewControllerAnimated:NO completion:nil];Wait(.2);
  [results addObject:@"PASS native unread count/bar controls, Files picker and readable server notice"];
@@ -536,6 +546,21 @@ static void HomeScrollChecks(UIWindow *window) {
   [results addObject:@"PASS populated Home overscroll, deferred refresh, long lists and repeated single/dual-column resizing"];
  } @finally { homeDraggingScroll=nil;method_setImplementation(dragging,originalHomeDragging);window.rootViewController=[UIViewController new];Wait(.1);method_setImplementation(discovery,oldDiscovery); }
 }
+static void ServerActionPresentationChecks(UIWindow *window) {
+ NSMutableArray *items=[NSMutableArray array];
+ for(NSUInteger i=1;i<=6;++i)[items addObject:@{@"name":[NSString stringWithFormat:@"Server %lu",(unsigned long)i],@"ip":@"127.0.0.1",@"port":@"64738"}];
+ MUCountryServerListController *servers=[[MUCountryServerListController alloc]initWithName:@"Fixture" serverList:items];
+ Show(window,servers);UITableView *table=[servers valueForKey:@"_tableView"];
+ NSIndexPath *selected=[NSIndexPath indexPathForRow:5 inSection:0];
+ [(id<UITableViewDelegate>)servers tableView:table didSelectRowAtIndexPath:selected];WaitForSheet(servers);
+ UIAlertController *menu=(id)servers.presentedViewController;
+ Check([menu isKindOfClass:UIAlertController.class] && menu.actions.count==3,@"Server actions did not present");
+ CGRect row=[table convertRect:[table rectForRowAtIndexPath:selected] toView:menu.presentationController.containerView];
+ CGRect popup=menu.presentationController.frameOfPresentedViewInContainerView;
+ Check(CGRectGetMaxY(popup)<=CGRectGetMinY(row)+20 && CGRectGetMaxY(popup)>CGRectGetMinY(row)-40,@"Server menu is not anchored above its selected row");
+ Save(window,@"server-actions-at-row.png");DismissSheet(servers);
+ [results addObject:@"PASS native server actions open upward at the selected row"];
+}
 static void QuickConnectHomeChecks(UIWindow *window) {
  Method connect=class_getInstanceMethod(MUConnectionController.class,@selector(connectToHostname:port:withUsername:andPassword:withParentViewController:));
  IMP oldConnect=method_setImplementation(connect,(IMP)CaptureQuickConnection);
@@ -572,6 +597,12 @@ static void QuickConnectHomeChecks(UIWindow *window) {
   NSIndexPath *quick=[NSIndexPath indexPathForRow:0 inSection:0];
   [(id)home showQuickConnect:nil];WaitForSheet(home);
   MUFavouriteServerEditViewController *form=(id)[(UINavigationController *)home.presentedViewController topViewController];
+  UINavigationController *quickNavigation=(id)home.presentedViewController;
+  if(quickNavigation.traitCollection.verticalSizeClass!=UIUserInterfaceSizeClassCompact){
+   CGRect frame=quickNavigation.presentationController.frameOfPresentedViewInContainerView;
+   Check(frame.size.height<window.bounds.size.height*.75 && CGRectGetMinY(frame)>window.bounds.size.height*.2,@"Quick Connect opens full-height instead of a floating half sheet");
+  }
+  Save(window,@"quick-connect-half-sheet.png");
   Check([form isKindOfClass:MUFavouriteServerEditViewController.class] && [form.tableView numberOfRowsInSection:0]==4,@"Quick connect does not use the native four-field connection form");
   UITextField *address=[form valueForKey:@"_addressField"],*port=[form valueForKey:@"_portField"],*password=[form valueForKey:@"_passwordField"];
   Check([form.tableView cellForRowAtIndexPath:quick]==[form valueForKey:@"_addressCell"] && password.secureTextEntry && !form.navigationItem.rightBarButtonItem.enabled,@"Quick connect exposes a description field, plaintext password or an empty address");
@@ -605,7 +636,7 @@ static void QuickConnectHomeChecks(UIWindow *window) {
  }
 }
 static void PreviewAndHomeChecks(UIWindow *window) {
- RecentHomeChecks(window);HomeScrollChecks(window);QuickConnectHomeChecks(window);
+ RecentHomeChecks(window);HomeScrollChecks(window);QuickConnectHomeChecks(window);ServerActionPresentationChecks(window);
  UIImage *image=[[[UIGraphicsImageRenderer alloc]initWithSize:CGSizeMake(600,340)]imageWithActions:^(UIGraphicsImageRendererContext *context){[UIColor.systemTealColor setFill];UIRectFill(CGRectMake(0,0,600,340));}];
  MUImageViewController *viewer=[[MUImageViewController alloc]initWithImages:@[image]];Show(window,viewer);NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:8];while([viewer.dataSource numberOfPreviewItemsInPreviewController:viewer]!=1 && deadline.timeIntervalSinceNow>0)Wait(.05);Check([viewer.dataSource numberOfPreviewItemsInPreviewController:viewer]==1,@"Native preview did not finish preparing");Wait(1);Save(window,@"native-quicklook-audit.png");
  [results addObject:@"PASS native Home and Quick Look screenshots"];
@@ -734,7 +765,7 @@ static void Run(void) {
   Check(NSBundle.mainBundle.localizations.count>=12,@"The installed app does not expose all twelve languages");
   [results addObject:[NSString stringWithFormat:@"PASS Foundation selected app language %@; Home = %@",language,NSLocalizedString(@"Home",nil)]];
  }
- @try{RecentServerChecks();UIWindowScene *scene=(id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;UIWindow *window=[(id)scene.delegate valueForKey:@"window"];if([NSProcessInfo.processInfo.environment[@"MU_UI_TEST_HOME_ONLY"]boolValue]){RecentHomeChecks(window);HomeScrollChecks(window);QuickConnectHomeChecks(window);}else{MUMessageStoreChecks(window,results);PublicServerModelChecks();PasswordConnectionChecks(window);SetupAndCertificateChecks(window);CertificateNavigationChecks(window);TransmissionChecks(window);TokenAndDetectionChecks(window);FormChecks(window);NativeChecks(window);SearchChecks(window);MenuChecks(window);CrowdedServerSnapshots(window);PreviewAndHomeChecks(window);}[results addObject:@"ALL INTERFACE AUDIT CHECKS PASSED"];}@catch(NSException *error){[results addObject:[NSString stringWithFormat:@"FAIL %@",error.reason]];}@finally{method_setImplementation(start,previous);[MLAudio.sharedAudio stop];}
+ @try{RecentServerChecks();UIWindowScene *scene=(id)UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;UIWindow *window=[(id)scene.delegate valueForKey:@"window"];if([NSProcessInfo.processInfo.environment[@"MU_UI_TEST_SERVER_ACTIONS_ONLY"]boolValue]){ServerActionPresentationChecks(window);}else if([NSProcessInfo.processInfo.environment[@"MU_UI_TEST_CONNECTION_ONLY"]boolValue]){MUConnectionLifecycleChecks(window,results);PasswordConnectionChecks(window);}else if([NSProcessInfo.processInfo.environment[@"MU_UI_TEST_HOME_ONLY"]boolValue]){RecentHomeChecks(window);HomeScrollChecks(window);QuickConnectHomeChecks(window);ServerActionPresentationChecks(window);}else{MUCredentialStoreChecks(results);MUMessageStoreChecks(window,results);PublicServerModelChecks();MUConnectionLifecycleChecks(window,results);PasswordConnectionChecks(window);SetupAndCertificateChecks(window);CertificateNavigationChecks(window);TransmissionChecks(window);TokenAndDetectionChecks(window);FormChecks(window);NativeChecks(window);SearchChecks(window);MenuChecks(window);CrowdedServerSnapshots(window);PreviewAndHomeChecks(window);}[results addObject:@"ALL INTERFACE AUDIT CHECKS PASSED"];}@catch(NSException *error){[results addObject:[NSString stringWithFormat:@"FAIL %@",error.reason]];}@finally{method_setImplementation(start,previous);[MLAudio.sharedAudio stop];}
  [[results componentsJoinedByString:@"\n"]writeToFile:[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"composer-ui-results.txt"]atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 __attribute__((constructor))static void Schedule(void){dispatch_async(dispatch_get_main_queue(),^{[NSTimer scheduledTimerWithTimeInterval:1 repeats:NO block:^(NSTimer *timer){Run();}];});}

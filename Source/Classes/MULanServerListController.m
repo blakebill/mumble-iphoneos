@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 #import "MULanServerListController.h"
+#import "MUInterface.h"
 #import "MUServerRootViewController.h"
 #import "MUFavouriteServer.h"
 #import "MUFavouriteServerEditViewController.h"
@@ -225,8 +226,7 @@ static NSInteger NetServiceAlphabeticalSort(id arg1, id arg2, void *reverse) {
         [parent presentViewController:alertCtrl animated:YES completion:nil];
     }]];
     
-    sheetCtrl.popoverPresentationController.sourceView = sourceView ?: parent.view;
-    sheetCtrl.popoverPresentationController.sourceRect = (sourceView ?: parent.view).bounds;
+    MUConfigureServerActionSheet(sheetCtrl, sourceView ?: parent.view);
     [parent presentViewController:sheetCtrl animated:YES completion:nil];
 }
 

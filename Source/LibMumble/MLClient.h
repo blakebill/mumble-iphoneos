@@ -64,6 +64,8 @@ typedef NS_OPTIONS(NSUInteger, MLPermission) {
 @protocol MLConnectionDelegate <NSObject>
 @optional
 - (void)connectionOpened:(MLConnection *)connection;
+- (void)connection:(MLConnection *)connection willReconnectAfterDelay:(NSTimeInterval)delay attempt:(NSUInteger)attempt;
+- (void)connectionDidRestoreSession:(MLConnection *)connection;
 - (void)connection:(MLConnection *)connection closedWithError:(NSError *)error;
 - (void)connection:(MLConnection *)connection unableToConnectWithError:(NSError *)error;
 - (void)connection:(MLConnection *)connection trustFailureInCertificateChain:(NSArray *)chain;
@@ -77,6 +79,8 @@ typedef NS_OPTIONS(NSUInteger, MLPermission) {
 @property(nonatomic,readonly) NSUInteger port;
 @property(nonatomic,readonly,getter=connected) BOOL connected;
 @property(nonatomic) BOOL forceTCP;
+@property(nonatomic) BOOL automaticReconnectEnabled;
+@property(nonatomic,readonly,getter=isRestoringSession) BOOL restoringSession;
 @property(nonatomic,copy) NSArray *certificateChain;
 @property(nonatomic,readonly,copy) NSArray<MLCertificate *> *peerCertificates;
 @property(nonatomic,readonly) BOOL peerCertificateChainTrusted;

@@ -242,7 +242,6 @@
 "Subject" = "主体";
 "Support" = "支持";
 "TLS negotiation failed" = "TLS 协商失败";
-"The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row." = "TLS 连接因错误而关闭。\n\n你可能在短时间内尝试连接了太多次，服务器因此暂时拒绝连接。";
 "The certificate is protected by a password. Please enter it below:" = "此证书受密码保护，请在下方输入密码：";
 "The connection was interrupted" = "连接已中断";
 "The photo could not be loaded. Please try again." = "无法加载照片，请重试。";
@@ -301,3 +300,8 @@
 "Connect directly" = "直接连接";
 "Browse servers" = "浏览服务器";
 "Recent" = "最近连接";
+
+/* Connection recovery and credential storage */
+"The credentials could not be saved securely. Please try again." = "无法安全保存凭据，请重试。";
+"Reconnecting… (attempt %lu)" = "正在重新连接…（第 %lu 次尝试）";
+"The server certificate changed. Reconnect manually to review it." = "服务器证书已更改，请手动重新连接以检查证书。";

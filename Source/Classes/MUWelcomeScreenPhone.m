@@ -623,7 +623,13 @@ typedef NS_ENUM(NSInteger, MUHomeList) {
     form.target = self;
     form.doneAction = @selector(quickConnectDone:);
     UINavigationController *navigation = [[UINavigationController alloc] initWithRootViewController:form];
-    navigation.modalPresentationStyle = UIModalPresentationFormSheet;
+    navigation.modalPresentationStyle = UIModalPresentationPageSheet;
+    UISheetPresentationController *sheet = navigation.sheetPresentationController;
+    sheet.detents = @[UISheetPresentationControllerDetent.mediumDetent, UISheetPresentationControllerDetent.largeDetent];
+    sheet.selectedDetentIdentifier = UISheetPresentationControllerDetentIdentifierMedium;
+    sheet.prefersGrabberVisible = YES;
+    sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
+    sheet.prefersEdgeAttachedInCompactHeight = YES;
     [self presentViewController:navigation animated:YES completion:nil];
 }
 

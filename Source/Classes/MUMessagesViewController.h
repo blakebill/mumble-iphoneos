@@ -5,4 +5,6 @@
 @interface MUMessagesViewController : UIViewController
 - (id) initWithServerModel:(MLServerModel *)model;
 - (void) clearAllMessages;
+- (void)resetRecipientAfterReconnect;
+- (void)setConnectionReconnecting:(BOOL)reconnecting;
 @end

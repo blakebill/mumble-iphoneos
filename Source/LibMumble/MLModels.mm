@@ -224,12 +224,14 @@ static NSString *MLEscape(NSString *text) {
         case mumble::tcp::Message::Type::ServerSync: {
             MumbleTCP::ServerSync message; if (!message.ParseFromArray(data.bytes,(int)data.length) || !message.has_session()) return;
             _connectedUser=_users[@(message.session())]; if (!_connectedUser) return;
+            [_connection restoreSessionForUser:_connectedUser];
             MLTextMessage *welcome=[MLTextMessage messageWithHTML:MLString(message.welcome_text())];
             [[MLAudio sharedAudio] setMainConnectionForAudio:_connection];
             for (MLUser *user in _users.allValues) [[MLAudio sharedAudio] setUserLocalMuted:user.isLocalMuted session:user.session connection:_connection];
             [[MLAudio sharedAudio] setLocalMuted:_connectedUser.isSelfMuted || _connectedUser.isMuted || _connectedUser.isSuppressed deafened:_connectedUser.isSelfDeafened || _connectedUser.isDeafened];
             MLNotify(serverModel:joinedServerAsUser:, serverModel:self joinedServerAsUser:self->_connectedUser);
-            MLNotify(serverModel:joinedServerAsUser:withWelcomeMessage:, serverModel:self joinedServerAsUser:self->_connectedUser withWelcomeMessage:welcome); break;
+            if(!_connection.isRestoringSession)MLNotify(serverModel:joinedServerAsUser:withWelcomeMessage:, serverModel:self joinedServerAsUser:self->_connectedUser withWelcomeMessage:welcome);
+            [_connection didRestoreSession];break;
         }
         case mumble::tcp::Message::Type::TextMessage: {
             MumbleTCP::TextMessage message; if (!message.ParseFromArray(data.bytes,(int)data.length)) return;
@@ -305,10 +307,11 @@ static NSString *MLEscape(NSString *text) {
 - (void)sendTextMessage:(MLTextMessage *)message toTree:(MLChannel *)channel { [self sendTextMessage:message toTreeChannels:@[channel] andChannels:@[] andUsers:@[]]; }
 - (void)sendTextMessage:(MLTextMessage *)message toChannel:(MLChannel *)channel { [self sendTextMessage:message toTreeChannels:@[] andChannels:@[channel] andUsers:@[]]; }
 - (void)sendTextMessage:(MLTextMessage *)message toUser:(MLUser *)user { [self sendTextMessage:message toTreeChannels:@[] andChannels:@[] andUsers:@[user]]; }
-- (void)setAccessTokens:(NSArray *)tokens { MumbleTCP::Authenticate message; for (NSString *token in tokens) message.add_tokens(MLUTF8(token)); [_connection sendProto:message]; }
+- (void)setAccessTokens:(NSArray *)tokens { [_connection updateAccessTokens:tokens]; }
 - (NSArray *)serverCertificates { return _connection.peerCertificates; }
 - (BOOL)serverCertificatesTrusted { return _connection.peerCertificateChainTrusted; }
 - (void)setSelfMuted:(BOOL)muted andSelfDeafened:(BOOL)deafened {
+    [_connection rememberSelfMuted:muted deafened:deafened];
     MumbleTCP::UserState message; message.set_self_mute(muted || deafened); message.set_self_deaf(deafened); [_connection sendProto:message];
 }
 - (void)registerConnectedUser { MumbleTCP::UserState message; message.set_session((uint32_t)_connectedUser.session); message.set_user_id(0); [_connection sendProto:message]; }

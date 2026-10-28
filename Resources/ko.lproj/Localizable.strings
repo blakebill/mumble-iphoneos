@@ -242,7 +242,6 @@
 "Subject" = "주체";
 "Support" = "지원";
 "TLS negotiation failed" = "TLS 협상 실패";
-"The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row." = "오류로 TLS 연결이 종료되었습니다.\n\n짧은 시간에 연결을 너무 많이 시도해 서버가 일시적으로 연결을 거부할 수 있습니다.";
 "The certificate is protected by a password. Please enter it below:" = "암호로 보호된 인증서입니다. 아래에 암호를 입력하세요:";
 "The connection was interrupted" = "연결이 끊어졌습니다";
 "The photo could not be loaded. Please try again." = "사진을 불러오지 못했습니다. 다시 시도하세요.";
@@ -301,3 +300,8 @@
 "Connect directly" = "직접 연결";
 "Browse servers" = "서버 둘러보기";
 "Recent" = "최근 연결";
+
+/* Connection recovery and credential storage */
+"The credentials could not be saved securely. Please try again." = "인증 정보를 안전하게 저장하지 못했습니다. 다시 시도해 주세요.";
+"Reconnecting… (attempt %lu)" = "재연결 중… (%lu번째 시도)";
+"The server certificate changed. Reconnect manually to review it." = "서버 인증서가 변경되었습니다. 직접 다시 연결하여 확인해 주세요.";

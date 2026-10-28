@@ -242,7 +242,6 @@
 "Subject" = "Titular";
 "Support" = "Suporte";
 "TLS negotiation failed" = "Falha na negociação TLS";
-"The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row." = "A conexão TLS foi encerrada devido a um erro.\n\nO servidor pode estar recusando temporariamente sua conexão após muitas tentativas consecutivas.";
 "The certificate is protected by a password. Please enter it below:" = "Este certificado é protegido por senha. Digite-a abaixo:";
 "The connection was interrupted" = "A conexão foi interrompida";
 "The photo could not be loaded. Please try again." = "Não foi possível carregar a foto. Tente novamente.";
@@ -301,3 +300,8 @@
 "Connect directly" = "Conectar diretamente";
 "Browse servers" = "Explorar servidores";
 "Recent" = "Conexões recentes";
+
+/* Connection recovery and credential storage */
+"The credentials could not be saved securely. Please try again." = "Não foi possível salvar as credenciais com segurança. Tente novamente.";
+"Reconnecting… (attempt %lu)" = "Reconectando… (tentativa %lu)";
+"The server certificate changed. Reconnect manually to review it." = "O certificado do servidor mudou. Reconecte manualmente para verificá-lo.";

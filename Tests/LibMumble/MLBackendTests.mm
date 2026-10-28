@@ -15,6 +15,7 @@
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
+#include <poll.h>
 
 using namespace mumble;
 static std::atomic<int> receivedVoice{0}, receivedTalkStop{0};
@@ -301,6 +302,88 @@ static int runTransport(bool modern) { @autoreleasepool {
     printf("PASS: certificate gating/pinning/rotation, SNI, auth, channel deltas, fragmented TCP, >64KiB messages, UDP server probe, %s Opus send/receive and TCP fallback\n",modern?"modern":"legacy");
     return 0;
 } }
+// Real loopback TLS exercises recovery without replacing transport methods.
+static std::atomic<int> recoveryJoins,recoveryRestores,recoveryErrors;
+@interface MLRecoveryTransportConnection : MLConnection @end
+@implementation MLRecoveryTransportConnection
+- (void)startPathMonitoring {} // Loopback does not depend on the host's default route.
+@end
+@interface MLRecoveryTransportDelegate : NSObject <MLConnectionDelegate,MLServerModelDelegate>
+@property(nonatomic) NSUInteger trustPrompts,opens;
+@property(nonatomic,weak) MLConnection *connection;
+@end
+@implementation MLRecoveryTransportDelegate
+- (void)connection:(MLConnection *)connection trustFailureInCertificateChain:(NSArray *)chain {
+    assert(++_trustPrompts==1);[connection setIgnoreSSLVerification:YES];[connection reconnect];
+}
+- (void)connectionOpened:(MLConnection *)connection {
+    ++_opens;[connection authenticateWithUsername:@"Recovery fixture" password:@"Fixture password" accessTokens:@[@"Fixture token"]];
+}
+- (void)serverModel:(MLServerModel *)model joinedServerAsUser:(MLUser *)user {
+    assert(user.isSelfMuted && user.isSelfDeafened);if(!self.connection.isRestoringSession)self.connection.automaticReconnectEnabled=YES;++recoveryJoins;
+}
+- (void)connectionDidRestoreSession:(MLConnection *)connection {++recoveryRestores;}
+- (void)connection:(MLConnection *)connection closedWithError:(NSError *)error {assert(error && !connection.automaticReconnectEnabled);++recoveryErrors;}
+- (void)connection:(MLConnection *)connection unableToConnectWithError:(NSError *)error {assert(false);}
+@end
+static void recoveryTransportTest(int terminal){@autoreleasepool{
+    recoveryJoins=0;recoveryRestores=0;recoveryErrors=0;
+    MLCertificate *identity=[MLCertificate selfSignedCertificateWithName:@"Recovery fixture" email:nil];
+    MLCertificate *changed=[MLCertificate selfSignedCertificateWithName:@"Rotated fixture" email:nil];
+    int listener=socket(AF_INET,SOCK_STREAM,0);assert(listener>=0);
+    sockaddr_in address{};address.sin_family=AF_INET;address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+    assert(!bind(listener,(sockaddr *)&address,sizeof(address)) && !listen(listener,4));
+    socklen_t length=sizeof(address);assert(!getsockname(listener,(sockaddr *)&address,&length));
+    MLConnection *connection=[MLRecoveryTransportConnection new];
+    MLServerModel *model=[[MLServerModel alloc]initWithConnection:connection];
+    MLRecoveryTransportDelegate *delegate=[MLRecoveryTransportDelegate new];delegate.connection=connection;connection.delegate=delegate;[model addDelegate:delegate];
+    std::thread server([&](){@autoreleasepool{
+        int attempts=terminal==0 ? 4 : 3;
+        for(int i=0;i<attempts;i++){
+            pollfd pending{listener,POLLIN,0};assert(poll(&pending,1,10000)>0);
+            int fd=accept(listener,nullptr,nullptr);assert(fd>=0);timeval timeout{5,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
+            SSL_CTX *context=serverContext(i==3 ? changed : identity);SSL *ssl=SSL_new(context);SSL_set_fd(ssl,fd);assert(SSL_accept(ssl)==1);
+            if(i==0 || i==3){unsigned char byte;assert(SSL_read(ssl,&byte,1)<=0);}
+            else{
+                assert(readPacket(ssl,"recovery client version").first==0);
+                MumbleTCP::Version version;version.set_version_v1(0x10500);sendProto(ssl,version);
+                auto authPacket=readPacket(ssl,"recovery authentication");MumbleTCP::Authenticate auth;
+                assert(authPacket.first==2 && auth.ParseFromArray(authPacket.second.data(),(int)authPacket.second.size()));
+                assert(auth.username()=="Recovery fixture" && auth.password()=="Fixture password" && auth.tokens_size()==1 && auth.tokens(0)=="Fixture token");
+                if(i==2 && terminal==2){
+                    MumbleTCP::Reject reject;reject.set_type(MumbleTCP::Reject::WrongServerPW);reject.set_reason("Fixture authentication rejected");sendProto(ssl,reject);
+                    unsigned char byte;assert(SSL_read(ssl,&byte,1)<=0);
+                }else{
+                    MumbleTCP::ChannelState channel;channel.set_channel_id(7);channel.set_parent(0);channel.set_name("Recovery");sendProto(ssl,channel);
+                    MumbleTCP::UserState user;user.set_session(i==1?1:42);user.set_channel_id(i==1?7:0);user.set_name("Recovery fixture");user.set_self_mute(i==1);user.set_self_deaf(i==1);sendProto(ssl,user);
+                    MumbleTCP::ServerSync sync;sync.set_session(user.session());sendProto(ssl,sync);
+                    if(i==1){
+                        auto until=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+                        while(recoveryJoins<1 && std::chrono::steady_clock::now()<until)std::this_thread::sleep_for(std::chrono::milliseconds(5));assert(recoveryJoins==1);
+                    }else{
+                        auto statePacket=readPacket(ssl,"restored channel and mute state");MumbleTCP::UserState restored;
+                        assert(statePacket.first==9 && restored.ParseFromArray(statePacket.second.data(),(int)statePacket.second.size()));
+                        assert(restored.session()==42 && restored.channel_id()==7 && restored.self_mute() && restored.self_deaf());sendProto(ssl,restored);
+                        auto until=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+                        while(recoveryRestores<1 && std::chrono::steady_clock::now()<until)std::this_thread::sleep_for(std::chrono::milliseconds(5));assert(recoveryRestores==1);
+                        if(terminal==1){MumbleTCP::UserRemove removed;removed.set_session(42);removed.set_actor(99);removed.set_reason("Fixture kick");sendProto(ssl,removed);unsigned char byte;assert(SSL_read(ssl,&byte,1)<=0);}
+                    }
+                }
+            }
+            SSL_shutdown(ssl);SSL_free(ssl);SSL_CTX_free(context);close(fd);
+        }close(listener);
+    }});
+    [connection connectToHost:@"127.0.0.1" port:ntohs(address.sin_port)];
+    NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:15];
+    while(!recoveryErrors && deadline.timeIntervalSinceNow>0){
+        if(recoveryJoins && !connection.automaticReconnectEnabled && !connection.isRestoringSession)connection.automaticReconnectEnabled=YES;
+        [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.005]];
+    }
+    assert(recoveryErrors==1 && !connection.automaticReconnectEnabled && delegate.trustPrompts==1 && delegate.opens==1);
+    assert(recoveryJoins==(terminal==2?1:2) && recoveryRestores==(terminal==2?0:1));
+    server.join();[connection disconnect];
+    printf("PASS real TLS recovery: cached authentication, session/channel/mute restoration; %s stops retries\n",terminal==0?"certificate rotation":terminal==1?"server kick":"authentication rejection");
+}}
 static void waitForIndicators(NSTimeInterval seconds) {
     NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:seconds];
     while (deadline.timeIntervalSinceNow>0) [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
@@ -361,7 +444,10 @@ static void keepaliveTimingTests() {
     assert(MLKeepaliveInterval(true,now,now-seconds(60))==seconds(15));
     printf("PASS: authentication and active voice retain fast keepalive; quiet connection uses 15 seconds\n");
 }
+void MLReconnectPolicyTests();
 int main(int argc, const char *argv[]) {
+    if(argc==2 && !strcmp(argv[1],"--reconnect-transport")){for(int terminal=0;terminal<3;++terminal)recoveryTransportTest(terminal);return 0;}
+    if(argc==2 && !strcmp(argv[1],"--reconnect-policy")){MLReconnectPolicyTests();return 0;}
     if (argc==2 && !strcmp(argv[1],"--delayed-talk-indicators")) { talkIndicatorTests(true); return 0; }
     keepaliveTimingTests(); imageMessageConfigTests(); talkIndicatorTests(); runTransport(false); runTransport(true); return 0;
 }

@@ -17,6 +17,8 @@ jobs:
         run: bash Scripts/test-text-messages.sh
       - name: Test audio capture buffers
         run: bash Scripts/test-audio-buffers.sh
+      - name: Test adaptive voice jitter buffer
+        run: bash Scripts/test-jitter-buffer.sh
       - name: Check translations
         run: python3 Scripts/check-localizations.py
       - name: Install build tools

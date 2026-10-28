@@ -11,9 +11,18 @@
 #include <cmath>
 #include <unordered_map>
 #include "MLCaptureBufferQueue.hpp"
+#include "MLAdaptiveJitterBuffer.hpp"
 
 NSString *MLAudioDidRestartNotification=@"MLAudioDidRestartNotification";
 struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
+enum class MLAudioEnginePhase {Idle, Preparing, Running, Recovering, Stopping, Failed};
+enum class MLAudioSessionOperation {None, Activating, Deactivating};
+static BOOL MLRequiresGraphRebuild(const MLAudioSettings &previous,const MLAudioSettings &current){
+    return previous.enablePreprocessor!=current.enablePreprocessor ||
+        previous.preferReceiverOverSpeaker!=current.preferReceiverOverSpeaker ||
+        previous.opusForceCELTMode!=current.opusForceCELTMode ||
+        (previous.enableSideTone && previous.sidetoneVolume>0)!=(current.enableSideTone && current.sidetoneVolume>0);
+}
 
 @interface MLPlayback : NSObject {
 @public
@@ -21,6 +30,8 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     uint64_t nextSequence;
     NSUInteger generation;
     double queuedSeconds;
+    MLAdaptiveJitterBuffer jitter;
+    BOOL jitterDrainScheduled;
 }
 @property(nonatomic,strong) AVAudioPlayerNode *player;
 @property(nonatomic) NSTimeInterval lastPacket;
@@ -43,6 +54,8 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
 @end
 
 @implementation MLAudio {
+    // Graph objects belong to _queue. Main may inspect a completed graph only
+    // while its phase is Running; Preparing/Stopping keep those reads out.
     AVAudioEngine *_engine;
     AVAudioConverter *_converter;
     AVAudioPCMBuffer *_convertedInput;
@@ -60,7 +73,8 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     SpeexPreprocessState *_preprocessor;
     std::vector<int16_t> _pending;
     mumble::Buf _encodedBuffer;
-    MLAudioSettings _settings;
+    MLAudioSettings _settings, _appliedEngineSettings;
+    std::atomic_uint64_t _configurationRevision;
     std::mutex _settingsMutex;
     std::atomic_bool _running, _forced, _localMuted, _localDeafened;
     std::atomic_bool _captureNeeded;
@@ -71,9 +85,9 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     std::atomic<float> _peak, _speech;
     std::atomic_uint32_t _bandwidthLimit;
     uint64_t _sequence;
-    BOOL _transmitting, _wantRunning;
+    BOOL _transmitting, _tapInstalled; // Audio queue only.
     // Lifecycle state is confined to the main thread. Only one session operation may be in flight.
-    BOOL _sessionTransition, _sessionActive, _permissionRequested, _interrupted, _notifyRestart, _tapInstalled;
+    BOOL _wantRunning, _sessionActive, _permissionRequested, _interrupted, _notifyRestart;
     NSUInteger _lifecycleGeneration;
     std::atomic_size_t _generation;
     dispatch_source_t _cleanupTimer;
@@ -84,7 +98,9 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     uint64_t _processingLogBaseline;
     NSTimeInterval _tapChangedAt, _processedChangedAt;
     NSUInteger _engineRetryCount;
-    BOOL _engineRecoveryInFlight;
+    MLAudioEnginePhase _enginePhase;
+    MLAudioSessionOperation _sessionOperation;
+    NSMutableArray<dispatch_block_t> *_engineStopCompletions;
     NSUInteger _engineRecoveryCount;
     NSTimeInterval _engineRecoveryWindow;
 }
@@ -94,6 +110,8 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
         _queue=dispatch_queue_create("info.mumble.libmumble.audio",dispatch_queue_attr_make_with_autorelease_frequency(DISPATCH_QUEUE_SERIAL,DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM));
         _sessionQueue=dispatch_queue_create("info.mumble.libmumble.audio-session",DISPATCH_QUEUE_SERIAL);
         _players=[NSMutableDictionary dictionary];
+        _enginePhase=MLAudioEnginePhase::Idle;_sessionOperation=MLAudioSessionOperation::None;
+        _engineStopCompletions=[NSMutableArray array];
         _playbackConnectionRevision=0; _userPlaybackRevision=0; _queuedPlaybackPackets=0;
         _settings={}; _settings.quality=40000; _settings.audioPerPacket=2;
         _settings.volume=1; _settings.micBoost=1; _settings.vadMin=.65; _settings.vadMax=.75;
@@ -113,7 +131,14 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     }
     return self;
 }
-- (BOOL)isRunning { return _running && _engine.isRunning; }
+- (BOOL)isRunning {
+    NSAssert(NSThread.isMainThread,@"Audio lifecycle snapshots belong to the main thread");
+    return _enginePhase==MLAudioEnginePhase::Running && _running && _engine.isRunning;
+}
+- (BOOL)isSessionTransitioning {return _sessionOperation!=MLAudioSessionOperation::None;}
+- (BOOL)isRecoveringEngine {return _enginePhase==MLAudioEnginePhase::Recovering;}
+- (BOOL)isChangingEngine {return _enginePhase==MLAudioEnginePhase::Preparing || _enginePhase==MLAudioEnginePhase::Stopping;}
+
 - (BOOL)usesAsynchronousSessionAPI {
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
     if (@available(iOS 27.0, *)) return YES;
@@ -137,10 +162,17 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     // Apple's voice processor owns echo cancellation, noise reduction and AGC.
     value.enableEchoCancellation=value.enablePreprocessor;
     if (value.enablePreprocessor) value.micBoost=1;
-    { std::lock_guard guard(_settingsMutex); _settings=value; }
+    BOOL rebuild;
+    { std::lock_guard guard(_settingsMutex);rebuild=MLRequiresGraphRebuild(_settings,value);_settings=value; }
+    if(rebuild){
+        uint64_t revision=++_configurationRevision;
+        dispatch_async(dispatch_get_main_queue(),^{
+            if(revision==self->_configurationRevision && self->_wantRunning && self->_enginePhase==MLAudioEnginePhase::Running && MLRequiresGraphRebuild(self->_appliedEngineSettings,self.settings))[self restart];
+        });
+    }
     dispatch_async(_queue, ^{
         MLAudioSettings current=self.settings;
-        [self configureActivityDetectorWithSettings:current];
+        if(self->_encoder || self->_engine)[self configureActivityDetectorWithSettings:current];
         if (self->_engine) self->_engine.mainMixerNode.outputVolume=current.volume;
     });
     [self updateCaptureDemand];
@@ -153,7 +185,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     [self updateCaptureDemand];
     if (deafened && !wasDeafened) dispatch_async(_queue, ^{
         if (!self->_localDeafened) return;
-        for (MLPlayback *playback in self->_players.allValues) { [playback.player stop]; [self->_engine detachNode:playback.player]; }
+        for (MLPlayback *playback in self->_players.allValues) if(playback.player) { [playback.player stop]; [self->_engine detachNode:playback.player]; }
         [self->_players removeAllObjects];
         if (self->_cleanupTimer) { dispatch_source_cancel(self->_cleanupTimer); self->_cleanupTimer=nil; }
     });
@@ -164,19 +196,16 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
 }
 - (void)resumeIfNeeded {
     NSAssert(NSThread.isMainThread,@"Audio lifecycle runs on the main thread");
-    if (!_wantRunning && _meterUsers>0 && UIApplication.sharedApplication.applicationState!=UIApplicationStateBackground) {
-        _meterOwnsCapture=true;
-        [self start];
-    }
+    if(!_wantRunning && _meterUsers>0 && UIApplication.sharedApplication.applicationState!=UIApplicationStateBackground){_meterOwnsCapture=true;[self start];}
+    if(!_wantRunning)return;
     BOOL stalled=[self captureHasStalled];
-    if (!_wantRunning || ([self isRunning] && !stalled)) return;
-    if ([self.delegate respondsToSelector:@selector(audioShouldBeRunning:)] && ![self.delegate audioShouldBeRunning:self]) return;
-    // An interruption began notification is not guaranteed to have an ended pair.
-    // Foreground return or an explicit capture action may request one activation;
-    // the system still decides whether higher-priority audio permits it.
-    _interrupted=NO; _engineRetryCount=0; _engineRecoveryCount=0;
-    if (stalled) [self checkCaptureHealth];
-    else if (_engine && !_sessionTransition) [self recoverStoppedEngine];
+    if([self isRunning] && !stalled)return;
+    if([self.delegate respondsToSelector:@selector(audioShouldBeRunning:)] && ![self.delegate audioShouldBeRunning:self])return;
+    _interrupted=NO;_engineRetryCount=0;_engineRecoveryCount=0;
+    if([self isChangingEngine])return; // Keep demand; the retiring graph will reconcile it.
+    if(_enginePhase==MLAudioEnginePhase::Failed)_enginePhase=MLAudioEnginePhase::Idle;
+    if(stalled)[self checkCaptureHealth];
+    else if(_enginePhase==MLAudioEnginePhase::Running && ![self isSessionTransitioning])[self recoverStoppedEngine];
     else [self start];
 }
 - (void)beginMetering { ++_meterUsers; [self updateCaptureDemand]; [self requestCaptureRecovery]; }
@@ -211,7 +240,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     _userPlaybackStates.clear();
     dispatch_async(_queue, ^{ self->_connection=connection; self->_pending.clear(); self->_sequence=0; self->_transmitting=NO; self->_forced=false;
         if (self->_engine) self->_engine.mainMixerNode.outputVolume=self.settings.volume;
-        for (MLPlayback *playback in self->_players.allValues) { [playback.player stop]; [self->_engine detachNode:playback.player]; }
+        for (MLPlayback *playback in self->_players.allValues) if(playback.player) { [playback.player stop]; [self->_engine detachNode:playback.player]; }
         [self->_players removeAllObjects];
         [self updateCaptureDemand];
     });
@@ -228,14 +257,15 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
         { std::lock_guard guard(self->_playbackRoutingMutex);
           if (revision!=self->_playbackConnectionRevision) return; }
         MLPlayback *playback=self->_players[@(session)];
-        if (playback) { [playback.player stop]; [self->_engine detachNode:playback.player]; [self->_players removeObjectForKey:@(session)]; }
+        if (playback) { if(playback.player){[playback.player stop];[self->_engine detachNode:playback.player];}[self->_players removeObjectForKey:@(session)]; }
     });
 }
 - (void)start {
     NSAssert(NSThread.isMainThread,@"Audio lifecycle runs on the main thread");
+    if(_enginePhase==MLAudioEnginePhase::Failed){_enginePhase=MLAudioEnginePhase::Idle;_engineRetryCount=0;}
     if (!_wantRunning) { _engineRetryCount=0; _engineRecoveryCount=0; _engineRecoveryWindow=0; }
     _wantRunning=YES;
-    if (_running || _sessionTransition || _interrupted || _engineRetryTimer || _engineRecoveryInFlight) return;
+    if (_enginePhase!=MLAudioEnginePhase::Idle || [self isSessionTransitioning] || _interrupted || _engineRetryTimer) return;
     if (AVAudioApplication.sharedInstance.recordPermission==AVAudioApplicationRecordPermissionUndetermined) {
         if (_permissionRequested) return;
         _permissionRequested=YES;
@@ -249,7 +279,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     if (AVAudioApplication.sharedInstance.recordPermission!=AVAudioApplicationRecordPermissionGranted) return;
     MLAudioSettings settings=self.settings;
     NSUInteger generation=_lifecycleGeneration;
-    _sessionTransition=YES;
+    _sessionOperation=MLAudioSessionOperation::Activating;
     dispatch_async(_sessionQueue, ^{
         AVAudioSession *session=AVAudioSession.sharedInstance;
         NSError *error=nil;
@@ -282,7 +312,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
 }
 - (void)completeActivation:(BOOL)active error:(NSError *)error generation:(NSUInteger)generation settings:(MLAudioSettings)settings {
     dispatch_async(dispatch_get_main_queue(), ^{
-        self->_sessionTransition=NO;
+        self->_sessionOperation=MLAudioSessionOperation::None;
         // A failed activation does not prove a previously active session was released.
         self->_sessionActive=self->_sessionActive || active;
         if (generation!=self->_lifecycleGeneration || !self->_wantRunning || self->_interrupted) {
@@ -291,16 +321,17 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
             return;
         }
         if (!active) { NSLog(@"Audio session failed: %@",error); return; }
-        [self startEngineWithSettings:settings];
+        if(MLRequiresGraphRebuild(settings,self.settings)){self->_notifyRestart=YES;[self restart];return;}
+        [self prepareEngineWithSettings:settings];
     });
 }
 - (void)deactivateSession {
     NSAssert(NSThread.isMainThread,@"Audio lifecycle runs on the main thread");
-    if (_sessionTransition || !_sessionActive) return;
-    _sessionTransition=YES;
+    if ([self isSessionTransitioning] || !_sessionActive || _enginePhase!=MLAudioEnginePhase::Idle) return;
+    _sessionOperation=MLAudioSessionOperation::Deactivating;
     void (^completed)(BOOL,NSError *)=^(BOOL inactive,NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            self->_sessionTransition=NO;
+            self->_sessionOperation=MLAudioSessionOperation::None;
             self->_sessionActive=!inactive;
             if (!inactive) NSLog(@"Audio session deactivation failed: %@",error);
             if (self->_wantRunning && !self->_interrupted) [self start];
@@ -321,36 +352,60 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
         completed(inactive,error);
     });
 }
+// Lifecycle decisions stay on main; graph/DSP work never waits there.
+- (void)prepareEngineWithSettings:(MLAudioSettings)settings {
+    NSAssert(NSThread.isMainThread,@"Graph transitions belong to the main thread");
+    if(_enginePhase!=MLAudioEnginePhase::Idle || !_wantRunning || _interrupted)return;
+    _enginePhase=MLAudioEnginePhase::Preparing;
+    size_t generation=++_generation;
+    dispatch_async(_queue,^{
+        if(generation!=self->_generation)return;
+        // Use the start result; a transient isRunning snapshot is not a startup failure.
+        BOOL ready=[self startEngineWithSettings:settings];
+        if(!ready)return;
+        dispatch_async(dispatch_get_main_queue(),^{
+            if(generation!=self->_generation || self->_enginePhase!=MLAudioEnginePhase::Preparing)return;
+            if(MLRequiresGraphRebuild(settings,self.settings)){[self restart];return;}
+            self->_appliedEngineSettings=settings;
+            self->_enginePhase=MLAudioEnginePhase::Running;self->_running=true;self->_engineRetryCount=0;
+            [self startCaptureMonitor];
+            if(self->_notifyRestart){self->_notifyRestart=NO;[NSNotificationCenter.defaultCenter postNotificationName:MLAudioDidRestartNotification object:self];}
+        });
+    });
+}
 - (AVAudioEngine *)makeAudioEngine { return [AVAudioEngine new]; }
-- (void)startEngineWithSettings:(MLAudioSettings)settings {
+- (BOOL)startEngineWithSettings:(MLAudioSettings)settings {
+    NSAssert(!NSThread.isMainThread,@"Audio graph construction must not block the UI");
+    NSUInteger generation=_generation;
     NSError *error=nil;
     _engine=[self makeAudioEngine];
     _engine.autoShutdownEnabled=NO;
-    if (![self configureVoiceProcessingForInput:_engine.inputNode settings:settings error:&error]) { [self engineStartupFailed:error]; return; }
+    if (![self configureVoiceProcessingForInput:_engine.inputNode settings:settings error:&error]) { [self engineStartupFailed:error]; return NO; }
     AVAudioFormat *input=[_engine.inputNode outputFormatForBus:0];
     if (input.sampleRate<=0 || !input.channelCount) {
         [self engineStartupFailed:[NSError errorWithDomain:@"MLAudio" code:1 userInfo:@{NSLocalizedDescriptionKey:@"Microphone input format is not ready"}]];
-        return;
+        return NO;
     }
     _format=[[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32 sampleRate:48000 channels:1 interleaved:NO];
     _converter=[[AVAudioConverter alloc] initFromFormat:input toFormat:_format];
     if (!_converter) {
         [self engineStartupFailed:[NSError errorWithDomain:@"MLAudio" code:2 userInfo:@{NSLocalizedDescriptionKey:@"Audio conversion unavailable"}]];
-        return;
+        return NO;
     }
     if (settings.enableSideTone && settings.sidetoneVolume>0) {
         _sidetone=[AVAudioPlayerNode new]; [_engine attachNode:_sidetone];
         [_engine connect:_sidetone to:_engine.mainMixerNode format:_format];
     }
-    _engine.mainMixerNode.outputVolume=settings.volume;
-    dispatch_sync(_queue, ^{ [self prepareEncoderWithSettings:settings]; });
-    NSUInteger generation=++_generation;
+    MLAudioSettings current=self.settings;
+    _engine.mainMixerNode.outputVolume=current.volume;
+    [self prepareEncoderWithSettings:current];
+    if(generation!=_generation)return NO;
     uint64_t tapBaseline=_tapCount;
     __weak MLAudio *weakSelf=self;
     auto buffers=std::make_shared<MLCaptureBufferQueue>(input,8192);
     if (!buffers->valid) {
         [self engineStartupFailed:[NSError errorWithDomain:@"MLAudio" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Microphone buffers unavailable"}]];
-        return;
+        return NO;
     }
     _captureSource=dispatch_source_create(DISPATCH_SOURCE_TYPE_DATA_ADD,0,0,_queue);
     dispatch_source_t captureSource=_captureSource;
@@ -389,16 +444,14 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
         if (frames) dispatch_source_merge_data(captureSource,1);
     }];
     _tapInstalled=YES;
+    if(generation!=_generation)return NO;
     [_engine prepare];
-    if (![_engine startAndReturnError:&error]) { [self engineStartupFailed:error]; return; }
-    _running=true; _engineRetryCount=0; [_sidetone play];
+    if (![_engine startAndReturnError:&error]) { [self engineStartupFailed:error]; return NO; }
+    [_sidetone play];
     AVAudioSession *session=AVAudioSession.sharedInstance;
     NSLog(@"Audio started: category=%@, mode=%@, options=%lu, voiceProcessing=%d",session.category,session.mode,(unsigned long)session.categoryOptions,settings.enablePreprocessor);
-    [self startCaptureMonitor];
-    if (_notifyRestart) {
-        _notifyRestart=NO;
-        [NSNotificationCenter.defaultCenter postNotificationName:MLAudioDidRestartNotification object:self];
-    }
+
+    return YES;
 }
 - (BOOL)configureVoiceProcessingForInput:(AVAudioInputNode *)input settings:(MLAudioSettings)settings error:(NSError **)error {
     if (!settings.enablePreprocessor) return YES;
@@ -451,7 +504,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
         for (NSNumber *session in audio->_players.allKeys) {
             MLPlayback *playback=audio->_players[session];
             if (now-playback.lastPacket>2) {
-                [playback.player stop]; [audio->_engine detachNode:playback.player]; [audio->_players removeObjectForKey:session];
+                if(playback.player){[playback.player stop];[audio->_engine detachNode:playback.player];}[audio->_players removeObjectForKey:session];
                 MLConnection *connection=audio->_connection;
                 dispatch_async(dispatch_get_main_queue(), ^{ [connection.model setTalkState:MLTalkStatePassive forSession:session.unsignedIntegerValue]; });
             }
@@ -461,45 +514,58 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
 }
 - (void)stop {
     NSAssert(NSThread.isMainThread,@"Audio lifecycle runs on the main thread");
-    _wantRunning=NO; _notifyRestart=NO; ++_lifecycleGeneration;
-    [self stopEngine];
-    [self deactivateSession];
+    _wantRunning=NO;_notifyRestart=NO;++_lifecycleGeneration;
+    [self stopEngineWithCompletion:^{[self deactivateSession];}];
 }
-- (void)stopEngine {
-    _running=false; ++_generation; _engineRecoveryInFlight=NO;
-    [_captureMonitorTimer invalidate]; _captureMonitorTimer=nil;
-    [_engineRetryTimer invalidate]; _engineRetryTimer=nil;
-    dispatch_sync(_queue, ^{
-        if (self->_cleanupTimer) { dispatch_source_cancel(self->_cleanupTimer); self->_cleanupTimer=nil; }
-        if (self->_tapInstalled) { [self->_engine.inputNode removeTapOnBus:0]; self->_tapInstalled=NO; }
-        if (self->_captureSource) { dispatch_source_cancel(self->_captureSource); self->_captureSource=nil; }
+- (void)stopEngineWithCompletion:(dispatch_block_t)completion {
+    NSAssert(NSThread.isMainThread,@"Graph transitions belong to the main thread");
+    if(completion)[_engineStopCompletions addObject:[completion copy]];
+    _running=false;
+    [_captureMonitorTimer invalidate];_captureMonitorTimer=nil;
+    [_engineRetryTimer invalidate];_engineRetryTimer=nil;
+    if(_enginePhase==MLAudioEnginePhase::Stopping)return;
+    _enginePhase=MLAudioEnginePhase::Stopping;++_generation;
+    dispatch_async(_queue,^{
+        if(self->_cleanupTimer){dispatch_source_cancel(self->_cleanupTimer);self->_cleanupTimer=nil;}
+        if(self->_tapInstalled){[self->_engine.inputNode removeTapOnBus:0];self->_tapInstalled=NO;}
+        if(self->_captureSource){dispatch_source_cancel(self->_captureSource);self->_captureSource=nil;}
         [self->_engine stop];
-        if (self->_transmitting) [self->_connection sendOpus:[NSData data] sequence:self->_sequence terminator:YES];
+        if(self->_transmitting)[self->_connection sendOpus:[NSData data] sequence:self->_sequence terminator:YES];
         MLConnection *connection=self->_connection;
-        dispatch_async(dispatch_get_main_queue(), ^{ [connection.model setTalkState:MLTalkStatePassive forSession:connection.model.connectedUser.session]; });
-        for (MLPlayback *playback in self->_players.allValues) [playback.player stop];
-        [self->_players removeAllObjects]; self->_encoder.reset();
-        if (self->_preprocessor) speex_preprocess_state_destroy(self->_preprocessor);
-        self->_preprocessor=nullptr; self->_pending.clear(); self->_transmitting=NO;
+        dispatch_async(dispatch_get_main_queue(),^{[connection.model setTalkState:MLTalkStatePassive forSession:connection.model.connectedUser.session];});
+        for(MLPlayback *playback in self->_players.allValues)[playback.player stop];
+        [self->_players removeAllObjects];self->_encoder.reset();
+        if(self->_preprocessor)speex_preprocess_state_destroy(self->_preprocessor);
+        self->_preprocessor=nullptr;self->_pending.clear();self->_transmitting=NO;
+        self->_sidetone=nil;self->_converter=nil;self->_convertedInput=nil;self->_engine=nil;
+        dispatch_async(dispatch_get_main_queue(),^{
+            self->_enginePhase=MLAudioEnginePhase::Idle;
+            NSArray<dispatch_block_t> *completions=[self->_engineStopCompletions copy];[self->_engineStopCompletions removeAllObjects];
+            for(dispatch_block_t finish in completions)finish();
+            // A start/resume can arrive while the old graph is being retired.
+            if(self->_wantRunning && !self->_interrupted && !self->_engineRetryTimer && ![self isSessionTransitioning] && self->_enginePhase==MLAudioEnginePhase::Idle)[self start];
+        });
     });
-    _sidetone=nil; _converter=nil; _convertedInput=nil; _engine=nil;
 }
 - (void)engineStartupFailed:(NSError *)error {
+    if(!NSThread.isMainThread){
+        size_t generation=_generation;
+        dispatch_async(dispatch_get_main_queue(),^{if(generation==self->_generation && self->_enginePhase==MLAudioEnginePhase::Preparing)[self engineStartupFailed:error];});return;
+    }
     NSLog(@"Audio engine startup failed: %@",error);
-    [self stopEngine];
-    // A route may briefly report no input while Voice Processing is settling.
-    // Preserve the connection's capture intent, but bound retries for unavailable hardware.
-    if (!_wantRunning || _interrupted || _engineRetryCount>=5) return;
-    NSUInteger generation=_lifecycleGeneration;
-    NSTimeInterval delay=MIN(.5 * ++_engineRetryCount,2.0);
-    __weak MLAudio *weakSelf=self;
-    _engineRetryTimer=[NSTimer timerWithTimeInterval:delay repeats:NO block:^(NSTimer *timer) {
-        MLAudio *audio=weakSelf;
-        if (!audio || timer!=audio->_engineRetryTimer) return;
-        audio->_engineRetryTimer=nil;
-        if (generation==audio->_lifecycleGeneration && audio->_wantRunning && !audio->_interrupted) [audio start];
+    NSUInteger lifecycle=_lifecycleGeneration;
+    [self stopEngineWithCompletion:^{
+        if(lifecycle!=self->_lifecycleGeneration || !self->_wantRunning || self->_interrupted)return;
+        if(self->_engineRetryCount>=5){self->_enginePhase=MLAudioEnginePhase::Failed;return;}
+        ++self->_engineRetryCount;
+        NSTimeInterval delay=std::min(.5 * self->_engineRetryCount,2.0);__weak MLAudio *weakSelf=self;
+        self->_engineRetryTimer=[NSTimer timerWithTimeInterval:delay repeats:NO block:^(NSTimer *timer){
+            MLAudio *audio=weakSelf;if(!audio || timer!=audio->_engineRetryTimer)return;
+            audio->_engineRetryTimer=nil;
+            if(lifecycle==audio->_lifecycleGeneration && audio->_wantRunning && !audio->_interrupted)[audio start];
+        }];
+        [NSRunLoop.mainRunLoop addTimer:self->_engineRetryTimer forMode:NSRunLoopCommonModes];
     }];
-    [NSRunLoop.mainRunLoop addTimer:_engineRetryTimer forMode:NSRunLoopCommonModes];
 }
 - (void)restart {
     BOOL wanted=_wantRunning || _running; [self stop];
@@ -517,7 +583,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     NSAssert(NSThread.isMainThread,@"Audio lifecycle runs on the main thread");
     // Modern recommendations can also arrive after a rejected activation.
     // Legacy late end events must not interfere with an explicit recovery.
-    if (!_interrupted && !(allowRetry && mayResume && _wantRunning && !self.isRunning && !_sessionTransition)) return;
+    if (!_interrupted && !(allowRetry && mayResume && _wantRunning && !self.isRunning && ![self isSessionTransitioning])) return;
     _interrupted=NO;
     BOOL wanted=_wantRunning &&
         (![self.delegate respondsToSelector:@selector(audioShouldBeRunning:)] || [self.delegate audioShouldBeRunning:self]);
@@ -569,17 +635,17 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     NSUInteger reason=[notification.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
     if (reason==AVAudioSessionRouteChangeReasonNewDeviceAvailable || reason==AVAudioSessionRouteChangeReasonOldDeviceUnavailable)
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (self->_wantRunning && !self->_sessionTransition && !self->_interrupted) {
-                if (self->_engine) [self recoverStoppedEngine];
+            if (self->_wantRunning && ![self isSessionTransitioning] && !self->_interrupted && ![self isChangingEngine]) {
+                if (self->_enginePhase==MLAudioEnginePhase::Running) [self recoverStoppedEngine];
                 else [self start];
             }
         });
 }
 - (void)recoverStoppedEngine {
     NSAssert(NSThread.isMainThread,@"Audio recovery runs on the main thread");
-    if (!_wantRunning || _interrupted || _sessionTransition || _engineRecoveryInFlight || !_engine || _engine.isRunning) return;
+    if (!_wantRunning || _interrupted || [self isSessionTransitioning] || _enginePhase!=MLAudioEnginePhase::Running || !_engine || _engine.isRunning) return;
     if (![self consumeEngineRecoveryAttempt]) return;
-    _engineRecoveryInFlight=YES; _running=false;
+    _enginePhase=MLAudioEnginePhase::Recovering; _running=false;
     // Resume the existing graph without toggling AVAudioSession or recreating Voice Processing.
     AVAudioEngine *engine=_engine;
     NSUInteger lifecycle=_lifecycleGeneration;
@@ -599,8 +665,9 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
         }
         dispatch_async(dispatch_get_main_queue(), ^{
             if (lifecycle!=self->_lifecycleGeneration || generation!=self->_generation || self->_engine!=engine) return;
-            self->_engineRecoveryInFlight=NO;
+            self->_enginePhase=MLAudioEnginePhase::Running;
             if (!self->_wantRunning || self->_interrupted) return;
+            if(MLRequiresGraphRebuild(self->_appliedEngineSettings,self.settings)){[self restart];return;}
             if (restored) self->_running=true;
             else [self engineStartupFailed:error];
         });
@@ -624,7 +691,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     [NSRunLoop.mainRunLoop addTimer:_captureMonitorTimer forMode:NSRunLoopCommonModes];
 }
 - (BOOL)captureHasStalled {
-    if (!_tapInstalled || !_engine) return NO;
+    if (_enginePhase!=MLAudioEnginePhase::Running || !_tapInstalled || !_engine) return NO;
     NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;
     uint64_t taps=_tapCount, processed=_processedCount;
     BOOL warmup=_captureWarmup.exchange(false);
@@ -637,25 +704,15 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
 }
 - (void)checkCaptureHealth {
     NSAssert(NSThread.isMainThread,@"Capture recovery runs on the main thread");
-    if (!_wantRunning || _interrupted || _sessionTransition || _engineRecoveryInFlight || !_tapInstalled || !_engine) return;
-    if (!_engine.isRunning) { [self recoverStoppedEngine]; return; }
-    if (![self captureHasStalled] || ![self consumeEngineRecoveryAttempt]) return;
-    _engineRecoveryInFlight=YES;
-    NSUInteger lifecycle=_lifecycleGeneration;
-    size_t generation=_generation;
-    // Drain queued DSP before rebuilding. A stalled processing queue must not
-    // make the UI wait for a synchronous teardown.
-    dispatch_async(_queue, ^{
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (lifecycle!=self->_lifecycleGeneration || generation!=self->_generation) return;
-            self->_engineRecoveryInFlight=NO;
-            if (!self->_wantRunning || self->_interrupted || self->_sessionTransition || ![self captureHasStalled]) return;
-            NSLog(@"Microphone data stalled; rebuilding the audio session");
-            [self stopEngine]; self->_notifyRestart=YES;
-            if (self->_sessionActive) [self deactivateSession];
-            else [self start];
-        });
-    });
+    if(!_wantRunning || _interrupted || [self isSessionTransitioning] || _enginePhase!=MLAudioEnginePhase::Running || !_tapInstalled || !_engine)return;
+    if(!_engine.isRunning){[self recoverStoppedEngine];return;}
+    if(![self captureHasStalled] || ![self consumeEngineRecoveryAttempt])return;
+    NSLog(@"Microphone data stalled; rebuilding the audio session");
+    _notifyRestart=YES;
+    [self stopEngineWithCompletion:^{
+        if(self->_sessionActive)[self deactivateSession];
+        else if(self->_wantRunning && !self->_interrupted)[self start];
+    }];
 }
 - (void)engineConfigurationChanged:(NSNotification *)notification {
     // AVFAudio delivers this on its own queue; never tear down the engine there.
@@ -663,7 +720,7 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
     uintptr_t changedEngine=(uintptr_t)(__bridge void *)notification.object;
     size_t generation=_generation;
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (generation==self->_generation && changedEngine==(uintptr_t)(__bridge void *)self->_engine) [self recoverStoppedEngine];
+        if (! [self isChangingEngine] && generation==self->_generation && changedEngine==(uintptr_t)(__bridge void *)self->_engine) [self recoverStoppedEngine];
     });
 }
 - (void)mediaReset:(NSNotification *)notification { dispatch_async(dispatch_get_main_queue(), ^{ [self restart]; }); }
@@ -764,13 +821,44 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
           auto user=self->_userPlaybackStates.find(session);
           uint64_t current=user==self->_userPlaybackStates.end()?0:user->second.revision;
           if (connectionRevision!=self->_playbackConnectionRevision || connection!=self->_playbackConnection || current!=userRevision || (user!=self->_userPlaybackStates.end() && user->second.muted)) return; }
-        [self playOpusFrame:data session:session sequence:sequence terminator:terminator];
+        [self enqueueOpusFrame:data session:session sequence:sequence terminator:terminator];
+    });
+}
+- (void)enqueueOpusFrame:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator {
+    unsigned frames=data.length ? mumble::Opus::packetFrames(MLBytes(data),48000) : 0;
+    if(data.length && (!frames || frames>5760))return;
+    MLPlayback *playback=_players[@(session)];
+    if(!playback){if(!data.length)return;playback=[MLPlayback new];_players[@(session)]=playback;[self startPlaybackCleanup];}
+    const uint8_t *bytes=(const uint8_t *)data.bytes;
+    MLAdaptiveJitterBuffer::Packet packet;packet.sequence=sequence;packet.ticks=(frames+479)/480;packet.terminator=terminator;
+    if(data.length)packet.bytes.assign(bytes,bytes+data.length);
+    double now=NSProcessInfo.processInfo.systemUptime;
+    if(playback->jitter.push(std::move(packet),now)){playback.lastPacket=now;[self drainJitterForSession:session playback:playback];}
+}
+- (void)drainJitterForSession:(NSUInteger)session playback:(MLPlayback *)playback {
+    if(_players[@(session)]!=playback || !_running || _localDeafened)return;
+    double now=NSProcessInfo.processInfo.systemUptime;
+    while(auto packet=playback->jitter.pop(now)){
+        if(packet->reset){
+            [playback.player stop];playback->decoder->reset();playback->nextSequence=packet->sequence;
+            playback->queuedSeconds=0;++playback->generation;[playback.player play];
+        }
+        NSData *data=[NSData dataWithBytes:packet->bytes.data() length:packet->bytes.size()];
+        [self playOpusFrame:data session:session sequence:packet->sequence terminator:packet->terminator];
+    }
+    auto deadline=playback->jitter.nextDeadline();
+    if(!deadline || playback->jitterDrainScheduled)return;
+    playback->jitterDrainScheduled=YES;
+    __weak MLAudio *weakSelf=self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(std::max(.001,*deadline-now)*NSEC_PER_SEC)),_queue,^{
+        playback->jitterDrainScheduled=NO;[weakSelf drainJitterForSession:session playback:playback];
     });
 }
 - (void)playOpusFrame:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence terminator:(BOOL)terminator {
         MLPlayback *playback=self->_players[@(session)];
-        if (!playback && data.length) {
-            playback=[MLPlayback new]; playback.player=[AVAudioPlayerNode new]; playback.lastPacket=NSProcessInfo.processInfo.systemUptime;
+        if (!playback && data.length) {playback=[MLPlayback new];self->_players[@(session)]=playback;}
+        if (playback && !playback.player && data.length) {
+            playback.player=[AVAudioPlayerNode new]; playback.lastPacket=NSProcessInfo.processInfo.systemUptime;
             [self->_engine attachNode:playback.player]; [self->_engine connect:playback.player to:self->_engine.mainMixerNode format:self->_format];
             [playback.player play]; self->_players[@(session)]=playback;
             [self startPlaybackCleanup];
@@ -780,14 +868,14 @@ struct MLUserPlaybackState { BOOL muted; uint64_t revision; };
         if (sequence<playback->nextSequence) return;
         if (!data.length) return;
         uint64_t gap=sequence-playback->nextSequence;
-        if (playback->queuedSeconds>.4 || gap>10) { [playback.player stop]; playback->decoder->reset(); playback->queuedSeconds=0; ++playback->generation; [playback.player play]; }
+        if (playback->queuedSeconds>.18 || gap>10) { [playback.player stop]; playback->decoder->reset(); playback->queuedSeconds=0; ++playback->generation; [playback.player play]; }
         else if (gap && gap<=10) {
             for (uint64_t i=0;i<gap;++i) {
                 AVAudioPCMBuffer *concealed=[playback bufferWithFormat:self->_format];
                 if (!concealed) break;
                 auto decoded=(*playback->decoder)(mumble::Opus::FloatView(concealed.floatChannelData[0],480),{});
                 concealed.frameLength=(AVAudioFrameCount)decoded.size();
-                if (concealed.frameLength) [self scheduleBuffer:concealed forPlayback:playback duration:0];
+                if (concealed.frameLength) {double duration=concealed.frameLength/48000.0;playback->queuedSeconds+=duration;[self scheduleBuffer:concealed forPlayback:playback duration:duration];}
                 else [playback recycleBuffer:concealed];
             }
         }

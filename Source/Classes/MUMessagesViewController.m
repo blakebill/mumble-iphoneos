@@ -22,7 +22,7 @@
 #import "MUDataURL.h"
 #import "MUImage.h"
 
-@interface MUMessagesViewController () <UITableViewDelegate, UITableViewDataSource, MLServerModelDelegate, UITextViewDelegate, PHPickerViewControllerDelegate, MUMessageBubbleTableViewCellDelegate, MUMessageRecipientViewControllerDelegate> {
+@interface MUMessagesViewController () <UITableViewDelegate, UITableViewDataSource, UITableViewDataSourcePrefetching, MLServerModelDelegate, UITextViewDelegate, PHPickerViewControllerDelegate, MUMessageBubbleTableViewCellDelegate, MUMessageRecipientViewControllerDelegate> {
     MLServerModel            *_model;
     UITableView              *_tableView;
     UIView                   *_textBarView;
@@ -54,6 +54,7 @@
     CGFloat                  _lastTableHeight;
     CGFloat                  _lastComposerInset;
     BOOL                     _followKeyboardChanges;
+    BOOL                     _sessionReconnecting;
 }
 - (void) setReceiverName:(NSString *)receiver symbol:(NSString *)symbolName;
 @end
@@ -114,6 +115,7 @@
     _tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     _tableView.delegate = self;
     _tableView.dataSource = self;
+    _tableView.prefetchDataSource = self;
     [self.view addSubview:_tableView];
 
     _textBarView = [UIView new];
@@ -316,7 +318,7 @@
 
 - (void)updateSendButton {
     BOOL hasContent = [_textView.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length > 0 || _pendingPhoto != nil;
-    _sendButton.enabled = hasContent && _receiverName.length > 0 && !_loadingPhoto && !_preparingPhoto;
+    _sendButton.enabled = !_sessionReconnecting && hasContent && _receiverName.length > 0 && !_loadingPhoto && !_preparingPhoto;
     _placeholderLabel.hidden = _textView.text.length > 0;
     _attachmentButton.enabled = !_loadingPhoto && !_preparingPhoto;
     _recipientButton.enabled = !_preparingPhoto;
@@ -478,6 +480,13 @@
     [cell setDelegate:self];
 }
 
+- (void)tableView:(UITableView *)tableView prefetchRowsAtIndexPaths:(NSArray<NSIndexPath *> *)paths {
+    NSMutableIndexSet *rows=[NSMutableIndexSet indexSet];for(NSIndexPath *path in paths)[rows addIndex:path.row];[_msgdb prefetchMessagesAtIndexes:rows];
+}
+- (void)tableView:(UITableView *)tableView cancelPrefetchingForRowsAtIndexPaths:(NSArray<NSIndexPath *> *)paths {
+    NSMutableIndexSet *rows=[NSMutableIndexSet indexSet];for(NSIndexPath *path in paths)[rows addIndex:path.row];[_msgdb cancelPrefetchAtIndexes:rows];
+}
+
 - (CGFloat) tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     NSNumber *cached = _messageHeights[@(indexPath.row)];
     if (cached) return cached.doubleValue;
@@ -500,7 +509,7 @@
 #pragma mark - Sending and message animation
 
 - (void)sendMessage:(id)sender {
-    if (_preparingPhoto || _loadingPhoto) return;
+    if (_sessionReconnecting || _preparingPhoto || _loadingPhoto) return;
     [_textView unmarkText];
     NSString *text = _textView.text ?: @"";
     if (!_pendingPhoto && ![text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) return;
@@ -533,6 +542,7 @@
 }
 
 - (void)sendPreparedMessage:(MLTextMessage *)message {
+    if(_sessionReconnecting)return;
     NSString *destination = nil;
     if (_user) { destination = _user.userName; [_model sendTextMessage:message toUser:_user]; }
     else if (_channel) { destination = _channel.channelName; [_model sendTextMessage:message toChannel:_channel]; }
@@ -726,6 +736,15 @@
 }
 
 #pragma mark - MLServerModel delegate
+- (void)resetRecipientAfterReconnect {
+    _sessionReconnecting=NO;
+    _user=nil;_channel=nil;_tree=nil;
+    [self setReceiverName:_model.connectedUser.channel.channelName symbol:@"person.2.circle.fill"];
+    [self updateSendButton];
+}
+- (void)setConnectionReconnecting:(BOOL)reconnecting {
+    _sessionReconnecting=reconnecting;[self updateSendButton];
+}
 
 - (void) serverModel:(MLServerModel *)model joinedServerAsUser:(MLUser *)user withWelcomeMessage:(MLTextMessage *)msg {
     if (!_user && !_channel && !_tree) [self setReceiverName:user.channel.channelName symbol:@"person.2.circle.fill"];

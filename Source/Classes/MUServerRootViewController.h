@@ -6,5 +6,5 @@
 
 @interface MUServerRootViewController : UINavigationController
 - (id) initWithConnection:(MLConnection *)conn andServerModel:(MLServerModel *)model;
-- (void) takeOwnershipOfConnectionDelegate;
+@property(nonatomic,copy) void (^disconnectHandler)(NSString *title,NSString *message);
 @end

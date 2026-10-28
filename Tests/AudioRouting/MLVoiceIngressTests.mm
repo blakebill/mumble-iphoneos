@@ -4,27 +4,38 @@
 #import "MLClient.h"
 #include <memory>
 #include <atomic>
+#include <vector>
 struct MLNetworkState;
 @interface MLConnection (IngressTests)
 - (std::shared_ptr<MLNetworkState>)networkState;
 - (void)queueReceivedVoice:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence talkState:(MLTalkState)talk terminator:(BOOL)terminator state:(const std::shared_ptr<MLNetworkState> &)state;
+@end
+@interface MLAudio (JitterIngressTests)
+- (void)setUserLocalMuted:(BOOL)muted session:(NSUInteger)session connection:(MLConnection *)connection;
 @end
 static MLAudio *ingressAudio;
 static dispatch_semaphore_t decodedSignal;
 static std::atomic_uint64_t decodedCount, activityCount;
 static std::atomic_bool decodedOnMain, activityOffMain;
 static IMP originalActivity;
+static std::vector<uint64_t> renderedSequences;
 static id FixtureAudio(id object,SEL command){return ingressAudio;}
 static void NoNetwork(id object,SEL command,std::shared_ptr<MLNetworkState> state,NSString *hostname,NSArray *identity,NSData *accepted){}
 static void DecodeProbe(id object,SEL command,NSData *data,NSUInteger session,uint64_t sequence,BOOL terminator){
     if(NSThread.isMainThread)decodedOnMain=true;
-    ++decodedCount;dispatch_semaphore_signal(decodedSignal);
+    renderedSequences.push_back(sequence);++decodedCount;dispatch_semaphore_signal(decodedSignal);
 }
 static void ActivityProbe(id object,SEL command,NSUInteger session,MLTalkState state,BOOL hasAudio,BOOL terminator){
     if(!NSThread.isMainThread)activityOffMain=true;
     ++activityCount;((void (*)(id,SEL,NSUInteger,MLTalkState,BOOL,BOOL))originalActivity)(object,command,session,state,hasAudio,terminator);
 }
 static void Check(BOOL condition,NSString *message){if(!condition)@throw [NSException exceptionWithName:@"VoiceIngressFailure" reason:message userInfo:nil];}
+@interface MLJitterFixtureEngine : NSObject @end
+@implementation MLJitterFixtureEngine
+- (id)mainMixerNode{return nil;}
+- (void)stop{}
+- (void)detachNode:(id)node{Check(node!=nil,@"A pending jitter buffer detaches a player that has not been created");}
+@end
 static void Wait(BOOL (^ready)(void)){
     NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:3];
     while(!ready() && deadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.005]];
@@ -41,7 +52,7 @@ static NSUInteger Pending(MLAudio *audio){
 void MLVoiceIngressTests(void (^record)(NSString *)){
     Method shared=class_getClassMethod(MLAudio.class,@selector(sharedAudio));IMP originalShared=method_setImplementation(shared,(IMP)FixtureAudio);
     Method run=class_getInstanceMethod(MLConnection.class,NSSelectorFromString(@"run:hostname:identity:accepted:"));IMP originalRun=method_setImplementation(run,(IMP)NoNetwork);
-    Method decode=class_getInstanceMethod(MLAudio.class,NSSelectorFromString(@"playOpusFrame:session:sequence:terminator:"));IMP originalDecode=method_setImplementation(decode,(IMP)DecodeProbe);
+    Method decode=class_getInstanceMethod(MLAudio.class,NSSelectorFromString(@"enqueueOpusFrame:session:sequence:terminator:"));IMP originalDecode=method_setImplementation(decode,(IMP)DecodeProbe);
     Method activity=class_getInstanceMethod(MLServerModel.class,NSSelectorFromString(@"receivedVoiceForSession:talkState:hasAudio:terminator:"));originalActivity=method_setImplementation(activity,(IMP)ActivityProbe);
     ingressAudio=[MLAudio new];MLAudio *audio=ingressAudio;
     MLConnection *connection=[MLConnection new];MLServerModel *model=[[MLServerModel alloc]initWithConnection:connection];
@@ -69,6 +80,7 @@ void MLVoiceIngressTests(void (^record)(NSString *)){
         Check(dispatch_semaphore_wait(entered,dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC))==0,@"Audio queue did not enter the mute fixture");
         uint64_t before=decodedCount;
         @try{
+            [audio setValue:[MLJitterFixtureEngine new] forKey:@"_engine"];
             dispatch_sync(network,^{[connection queueReceivedVoice:packet session:42 sequence:101 talkState:MLTalkStateTalking terminator:NO state:state];});
             user.localMuted=YES;user.localMuted=NO;
             dispatch_semaphore_signal(gate);[audio copyAudioOutputMixerDebugInfo];
@@ -101,6 +113,29 @@ void MLVoiceIngressTests(void (^record)(NSString *)){
             [audio copyAudioOutputMixerDebugInfo];Check(decodedCount==before+1,@"The current connection cannot resume playback after reconnect");
         }@finally{dispatch_semaphore_signal(gate);}
         record(@"bounded voice ingress and reconnect generations discard stale playback");
+        // Exercise the real jitter integration; only the final render operation
+        // is substituted, so no microphone, output device or socket is required.
+        method_setImplementation(decode,originalDecode);
+        Method render=class_getInstanceMethod(MLAudio.class,NSSelectorFromString(@"playOpusFrame:session:sequence:terminator:"));
+        IMP originalRender=method_setImplementation(render,(IMP)DecodeProbe);
+        @try{
+            const unsigned char silence[]={0xf8,0xff,0xfe};NSData *opus=[NSData dataWithBytes:silence length:sizeof(silence)];
+            auto current=[connection networkState];renderedSequences.clear();before=decodedCount;
+            dispatch_sync(network,^{for(NSNumber *sequence in @[@0,@4,@2])[connection queueReceivedVoice:opus session:42 sequence:sequence.unsignedLongLongValue talkState:MLTalkStateTalking terminator:NO state:current];});
+            Wait(^BOOL{return decodedCount==before+3;});
+            Check(renderedSequences==std::vector<uint64_t>({0,2,4}),@"The audio integration does not render reordered packets in sequence");
+            [audio setMainConnectionForAudio:connection];[audio copyAudioOutputMixerDebugInfo];before=decodedCount;
+            dispatch_sync(network,^{[connection queueReceivedVoice:opus session:42 sequence:0 talkState:MLTalkStateTalking terminator:NO state:current];});
+            [audio copyAudioOutputMixerDebugInfo];[audio setUserLocalMuted:YES session:42 connection:connection];
+            [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.15]];
+            Check(decodedCount==before,@"A jitter timer releases audio after local mute");
+            [audio setUserLocalMuted:NO session:42 connection:connection];
+            dispatch_sync(network,^{[connection queueReceivedVoice:opus session:42 sequence:2 talkState:MLTalkStateTalking terminator:NO state:current];});
+            [audio copyAudioOutputMixerDebugInfo];[audio setMainConnectionForAudio:nil];[audio copyAudioOutputMixerDebugInfo];
+            [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.15]];
+            Check(decodedCount==before,@"A retired connection's jitter timer renders stale audio");
+            record(@"real jitter ingress reorders Opus frames; mute and reconnect cancel pending playout");
+        }@finally{method_setImplementation(render,originalRender);}
     }@finally{
         [connection disconnect];SetRunning(audio,NO);[audio stop];
         dispatch_sync((dispatch_queue_t)[connection valueForKey:@"_worker"],^{});

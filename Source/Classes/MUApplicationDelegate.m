@@ -9,6 +9,7 @@
 #import "MUAppMenuViewController.h"
 #import "MUOnboardingViewController.h"
 #import "MUDatabase.h"
+#import "MUCredentialStore.h"
 #import "MUPublicServerList.h"
 #import "MUConnectionController.h"
 #import "MUNotificationController.h"
@@ -48,8 +49,8 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
 - (BOOL) application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     (void)application;
     (void)launchOptions;
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(connectionOpened:) name:MUConnectionOpenedNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(connectionClosed:) name:MUConnectionClosedNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(connectionStateChanged:) name:MUConnectionStateDidChangeNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(credentialStorageFailed:) name:MUCredentialStorageDidFailNotification object:nil];
     
     [MUNotificationController sharedController];
     
@@ -164,7 +165,7 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
         return YES;
     }
     MUConnectionController *connController = [MUConnectionController sharedController];
-    if ([connController isConnected]) {
+    if (connController.hasActiveSession || connController.hasPendingConnection) {
         return NO;
     }
     NSString *hostname = [url host];
@@ -245,32 +246,8 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
     settings.opusForceCELTMode = [defaults boolForKey:@"AudioOpusLowDelay"];
     
     MLAudio *audio = [MLAudio sharedAudio];
-    MLAudioSettings previous, current;
-    [audio readAudioSettings:&previous];
     [audio updateAudioSettings:&settings];
-    [audio readAudioSettings:&current];
-    // Detection mode and thresholds are applied on the audio queue without
-    // interrupting the microphone or rebuilding the native voice processor.
-    BOOL changed = previous.transmitType != current.transmitType ||
-        previous.quality != current.quality ||
-        previous.audioPerPacket != current.audioPerPacket ||
-        previous.noiseSuppression != current.noiseSuppression ||
-        previous.amplification != current.amplification ||
-        previous.jitterBufferSize != current.jitterBufferSize ||
-        previous.volume != current.volume ||
-        previous.outputDelay != current.outputDelay ||
-        previous.micBoost != current.micBoost ||
-        previous.enablePreprocessor != current.enablePreprocessor ||
-        previous.enableEchoCancellation != current.enableEchoCancellation ||
-        previous.enableSideTone != current.enableSideTone ||
-        previous.sidetoneVolume != current.sidetoneVolume ||
-        previous.preferReceiverOverSpeaker != current.preferReceiverOverSpeaker ||
-        previous.opusForceCELTMode != current.opusForceCELTMode;
-    // Restart only when the engine is already up. Starting Voice Processing
-    // during launch blocks the process before the first screen appears.
-    if (changed && [audio isRunning]) {
-        [audio restart];
-    }
+
 }
 
 // Reload application preferences...
@@ -297,18 +274,16 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
 }
 
 
-- (void) connectionOpened:(NSNotification *)notification {
-    _connectionActive = YES;
-    [self reloadPreferences];
-    if (![[MLAudio sharedAudio] isRunning]) {
-        [[MLAudio sharedAudio] start];
-        [[MLAudio sharedAudio] resumeIfNeeded];
-    }
+- (void)credentialStorageFailed:(NSNotification *)notification {
+    if(_window.rootViewController)[MUNotificationController.sharedController addNotification:NSLocalizedString(@"The credentials could not be saved securely. Please try again.", nil) fromViewController:_window.rootViewController];
 }
 
-- (void) connectionClosed:(NSNotification *)notification {
-    _connectionActive = NO;
-    [[MLAudio sharedAudio] stop];
+- (void)connectionStateChanged:(NSNotification *)notification {
+    BOOL active=[(MUConnectionController *)notification.object hasActiveSession];
+    if(active==_connectionActive)return;
+    _connectionActive=active;
+    if(active){[self reloadPreferences];[MLAudio.sharedAudio start];[MLAudio.sharedAudio resumeIfNeeded];}
+    else [MLAudio.sharedAudio stop];
 }
 
 - (void) sceneWillResignActive {
@@ -325,6 +300,7 @@ NSNotificationName const MUAudioTransmissionModeDidChangeNotification = @"MUAudi
 }
 
 - (void) sceneDidBecomeActive {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{[MUDatabase migrateLegacyCredentials];});
     // It is possible that we will become active after a phone call has ended.
     // In the case of phone calls, MLAudio will automatically stop itself, to
     // allow the phone call to go through. However, once we're back inside the

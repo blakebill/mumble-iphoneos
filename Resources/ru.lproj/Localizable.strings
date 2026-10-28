@@ -242,7 +242,6 @@
 "Subject" = "Субъект";
 "Support" = "Поддержка";
 "TLS negotiation failed" = "Ошибка согласования TLS";
-"The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row." = "Соединение TLS закрыто из-за ошибки.\n\nСервер мог временно отклонить подключение из-за слишком частых попыток.";
 "The certificate is protected by a password. Please enter it below:" = "Сертификат защищён паролем. Введите его ниже:";
 "The connection was interrupted" = "Соединение прервано";
 "The photo could not be loaded. Please try again." = "Не удалось загрузить фото. Повторите попытку.";
@@ -301,3 +300,8 @@
 "Connect directly" = "Прямое подключение";
 "Browse servers" = "Обзор серверов";
 "Recent" = "Недавние подключения";
+
+/* Connection recovery and credential storage */
+"The credentials could not be saved securely. Please try again." = "Не удалось безопасно сохранить учётные данные. Повторите попытку.";
+"Reconnecting… (attempt %lu)" = "Повторное подключение… (попытка %lu)";
+"The server certificate changed. Reconnect manually to review it." = "Сертификат сервера изменился. Подключитесь вручную, чтобы проверить его.";

@@ -242,7 +242,6 @@
 "Subject" = "Udstedt til";
 "Support" = "Support";
 "TLS negotiation failed" = "TLS-forhandling mislykkedes";
-"The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row." = "TLS-forbindelsen blev lukket på grund af en fejl.\n\nServeren kan midlertidigt afvise din forbindelse efter for mange forsøg i træk.";
 "The certificate is protected by a password. Please enter it below:" = "Certifikatet er beskyttet af et password. Indtast det venligst:";
 "The connection was interrupted" = "Forbindelsen blev afbrudt";
 "The photo could not be loaded. Please try again." = "Fotoet kunne ikke indlæses. Prøv igen.";
@@ -301,3 +300,8 @@
 "Connect directly" = "Opret direkte forbindelse";
 "Browse servers" = "Find servere";
 "Recent" = "Seneste forbindelser";
+
+/* Connection recovery and credential storage */
+"The credentials could not be saved securely. Please try again." = "Loginoplysningerne kunne ikke gemmes sikkert. Prøv igen.";
+"Reconnecting… (attempt %lu)" = "Opretter forbindelse igen… (forsøg %lu)";
+"The server certificate changed. Reconnect manually to review it." = "Serverens certifikat er ændret. Opret forbindelse manuelt for at kontrollere det.";

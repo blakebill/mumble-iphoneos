@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 app_path="${1:?Usage: bash Scripts/test-ui-interface.sh /path/to/Simulator/Mumble.app}"
 validation_root="$(mktemp -d "${TMPDIR:-/tmp}/mumble-ui-tests.XXXXXX")"
 mkdir -p "$validation_root"
-xcrun --sdk iphonesimulator clang -fmodules -fmodules-cache-path=/tmp/mumble-preview-clang-modules -arch arm64 -mios-simulator-version-min=27.0 -fobjc-arc -dynamiclib -undefined dynamic_lookup -framework UIKit -framework Foundation -framework PhotosUI -framework UniformTypeIdentifiers -I "$repo_root/Source/Classes" -I "$repo_root/Source/LibMumble" "$repo_root/Tests/UIInterface/MUInterfaceAuditValidation.m" "$repo_root/Tests/MessageStore/MUMessageStoreChecks.m" -o "$validation_root/MUNativeUIValidation.dylib"
+xcrun --sdk iphonesimulator clang -fmodules -fmodules-cache-path=/tmp/mumble-preview-clang-modules -arch arm64 -mios-simulator-version-min=27.0 -fobjc-arc -dynamiclib -undefined dynamic_lookup -framework UIKit -framework Foundation -framework PhotosUI -framework UniformTypeIdentifiers -I "$repo_root/Source/Classes" -I "$repo_root/Source/LibMumble" "$repo_root/Tests/UIInterface/MUInterfaceAuditValidation.m" "$repo_root/Tests/MessageStore/MUMessageStoreChecks.m" "$repo_root/Tests/Credentials/MUCredentialStoreChecks.m" "$repo_root/Tests/ConnectionLifecycle/MUConnectionLifecycleChecks.m" -o "$validation_root/MUNativeUIValidation.dylib"
 python3 - "$app_path" "$validation_root/Mumble.app" <<'PY'
 from pathlib import Path
 import shutil,plistlib,sys

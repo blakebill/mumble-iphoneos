@@ -242,7 +242,6 @@
 "Subject" = "Subject";
 "Support" = "Support";
 "TLS negotiation failed" = "TLS negotiation failed";
-"The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row." = "The TLS connection was closed due to an error.\n\nThe server might be temporarily rejecting your connection because you have attempted to connect too many times in a row.";
 "The certificate is protected by a password. Please enter it below:" = "The certificate is protected by a password. Please enter it below:";
 "The connection was interrupted" = "The connection was interrupted";
 "The photo could not be loaded. Please try again." = "The photo could not be loaded. Please try again.";
@@ -301,3 +300,8 @@
 "Connect directly" = "Connect directly";
 "Browse servers" = "Browse servers";
 "Recent" = "Recent";
+
+/* Connection recovery and credential storage */
+"The credentials could not be saved securely. Please try again." = "The credentials could not be saved securely. Please try again.";
+"Reconnecting… (attempt %lu)" = "Reconnecting… (attempt %lu)";
+"The server certificate changed. Reconnect manually to review it." = "The server certificate changed. Reconnect manually to review it.";

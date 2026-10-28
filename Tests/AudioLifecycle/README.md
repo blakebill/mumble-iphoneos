@@ -43,6 +43,25 @@ session calls must never run on the main thread. On iOS 27 the asynchronous syst
 API must be used. Callback completion is deliberately delivered from a background
 queue. The script prints results and fails if a check fails or times out.
 
+Graph tests hold the DSP queue and pause construction while issuing stop/start
+requests. They assert main-thread responsiveness, retirement before deactivation,
+and rejection of stale completions. Six consecutive construction failures exhaust
+the initial attempt plus five retries; no implicit retry loop may follow, while
+a later explicit start gets a fresh budget. Settings tests cover live volume,
+bitrate, packet duration and transmission updates, coalesced changes, and route
+changes during both session activation and graph construction.
+The PCM-to-Opus test also starts an engine whose running-state snapshot lags its
+successful start result. Capture must continue and send an encoded packet instead
+of being incorrectly torn down as a startup failure.
+
+The interface audit also exercises the connection owner without a real server:
+joined-only capture demand, stale authentication/errors, reconnect during initial
+presentation, stable delegate ownership, cancellation, and suppression of old
+page actions and terminal alerts after a replacement connection starts.
+Self-signed certificate checks use the app's tab/navigation containment and
+complete server sync while a certificate or Connecting alert is still leaving.
+Both first-time trust and remembered-trust reconnects must show the joined server.
+
 To exercise synchronous session activation on the same Simulator, pass `legacy`
 as the second argument. The fixture overrides only the audio object's API policy;
 the application's compiled background activation/deactivation code still runs.

@@ -97,13 +97,11 @@
 - (void) tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     MUFavouriteServer *favServ = [_favouriteServers objectAtIndex:[indexPath row]];
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    UIView *sourceView = [tableView cellForRowAtIndexPath:indexPath] ?: self.view;
     
     UIAlertController* sheetCtrl = [UIAlertController alertControllerWithTitle:[favServ displayName]
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleActionSheet];
-    sheetCtrl.popoverPresentationController.sourceView = sourceView;
-    sheetCtrl.popoverPresentationController.sourceRect = sourceView.bounds;
+    MUConfigureServerActionSheet(sheetCtrl, [tableView cellForRowAtIndexPath:indexPath] ?: self.view);
     
     [sheetCtrl addAction: [UIAlertAction actionWithTitle:NSLocalizedString(@"Cancel", nil)
                                                    style:UIAlertActionStyleCancel

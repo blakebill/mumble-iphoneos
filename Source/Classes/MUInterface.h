@@ -1,6 +1,14 @@
 // Shared UIKit defaults for forms and ordinary settings/list cells.
 #import <UIKit/UIKit.h>
 
+static inline void MUConfigureServerActionSheet(UIAlertController *sheet, UIView *sourceView) {
+    UIPopoverPresentationController *popover = sheet.popoverPresentationController;
+    popover.sourceView = sourceView;
+    popover.sourceRect = CGRectNull;
+    // The arrow points down to the selected row, so the menu opens above it.
+    popover.permittedArrowDirections = UIPopoverArrowDirectionDown;
+}
+
 static inline void MUApplyRootLargeTitle(UIViewController *controller) {
     BOOL verticalBar = NO;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100

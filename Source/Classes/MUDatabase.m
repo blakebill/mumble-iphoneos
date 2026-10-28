@@ -4,9 +4,16 @@
 
 #import "MUDatabase.h"
 #import "MUFavouriteServer.h"
+#import "MUCredentialStore.h"
 
 static FMDatabase *db = nil;
+static NSString *credentialNamespace;
+static BOOL credentialsPendingMigration;
 static void *MUDatabaseQueueKey = &MUDatabaseQueueKey;
+
+static NSString *MUHostnameKey(NSString *hostname) {
+    return [hostname stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].lowercaseString;
+}
 
 static dispatch_queue_t MUDatabaseQueue(void) {
     static dispatch_queue_t queue;
@@ -31,6 +38,7 @@ static void MUDatabasePerform(dispatch_block_t block) {
 + (void) moveOldDatabases;
 + (void) openDatabaseIfNeeded;
 + (void) storeFavouriteOnQueue:(MUFavouriteServer *)favServ;
++ (void)migrateCredentialsOnQueue;
 @end
 
 @implementation MUDatabase
@@ -82,6 +90,8 @@ static void MUDatabasePerform(dispatch_block_t block) {
     });
 }
 
++ (void)migrateLegacyCredentials {MUDatabasePerform(^{[self openDatabaseIfNeeded];[self migrateCredentialsOnQueue];});}
+
 + (void) openDatabaseIfNeeded {
     if (db != nil) {
         return;
@@ -105,6 +115,7 @@ static void MUDatabasePerform(dispatch_block_t block) {
         return;
     }
 
+    [db executeUpdate:@"PRAGMA secure_delete=ON"];
     [db executeUpdate:@"CREATE TABLE IF NOT EXISTS `favourites` "
                       @"(`id` INTEGER PRIMARY KEY AUTOINCREMENT,"
                       @" `name` TEXT,"
@@ -142,9 +153,55 @@ static void MUDatabasePerform(dispatch_block_t block) {
     [db executeUpdate:@"CREATE UNIQUE INDEX IF NOT EXISTS `tokens_host_port`"
                       @" on `tokens`(`hostname`,`port`)"];
 
+    [db executeUpdate:@"CREATE TABLE IF NOT EXISTS credential_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)"];
+    [db executeUpdate:@"INSERT OR IGNORE INTO credential_metadata (key,value) VALUES ('namespace',?)",NSUUID.UUID.UUIDString];
+    FMResultSet *namespaceRow=[db executeQuery:@"SELECT value FROM credential_metadata WHERE key='namespace'"];
+    if([namespaceRow next])credentialNamespace=[namespaceRow stringForColumnIndex:0];[namespaceRow close];
+    [self migrateCredentialsOnQueue];
+
     if ([db hadError]) {
         NSLog(@"MUDatabase: Error: %@ (Code: %i)", [db lastErrorMessage], [db lastErrorCode]);
     }
+}
+
+// Run on the database queue. Keychain writes are verified before SQL is cleared.
++ (NSString *)passwordAccount:(NSInteger)identifier {
+    return [NSString stringWithFormat:@"%@:favourite:%ld",credentialNamespace,(long)identifier];
+}
++ (NSString *)tokenAccount:(NSString *)hostname port:(NSInteger)port {
+    NSData *endpoint=[NSJSONSerialization dataWithJSONObject:@[hostname.lowercaseString ?: @"",@(port)] options:0 error:nil];
+    return [NSString stringWithFormat:@"%@:tokens:%@",credentialNamespace,[endpoint base64EncodedStringWithOptions:0]];
+}
++ (BOOL)migrateData:(NSData *)data account:(NSString *)account {
+    if(!credentialNamespace.length)return NO;
+    OSStatus status;[MUCredentialStore dataForAccount:account status:&status];
+    // A previous successful save wins over a stale SQL copy after a crash.
+    if(status==errSecItemNotFound)status=[MUCredentialStore setData:data forAccount:account];
+    return status==errSecSuccess;
+}
++ (void)migrateCredentialsOnQueue {
+    credentialsPendingMigration=NO;
+    FMResultSet *rows=[db executeQuery:@"SELECT id,password FROM favourites WHERE password IS NOT NULL"];
+    NSMutableArray *passwords=[NSMutableArray array];
+    while([rows next])[passwords addObject:@[@([rows longLongIntForColumnIndex:0]),[rows stringForColumnIndex:1] ?: @""]];[rows close];
+    for(NSArray *row in passwords){
+        NSString *password=row[1];
+        if(!password.length || [self migrateData:[password dataUsingEncoding:NSUTF8StringEncoding] account:[self passwordAccount:[row[0]integerValue]]]){
+            if(![db executeUpdate:@"UPDATE favourites SET password=NULL WHERE id=?",row[0]])credentialsPendingMigration=YES;
+        }else credentialsPendingMigration=YES;
+    }
+    rows=[db executeQuery:@"SELECT id,hostname,port,tokens FROM tokens WHERE tokens IS NOT NULL ORDER BY id DESC"];
+    NSMutableArray *tokens=[NSMutableArray array];
+    while([rows next])[tokens addObject:@[@([rows longLongIntForColumnIndex:0]),[rows stringForColumnIndex:1] ?: @"",@([rows intForColumnIndex:2]),[rows dataForColumnIndex:3] ?: NSData.data]];[rows close];
+    for(NSArray *row in tokens){
+        if([self migrateData:row[3] account:[self tokenAccount:row[1] port:[row[2]integerValue]]]){
+            if(![db executeUpdate:@"DELETE FROM tokens WHERE id=?",row[0]])credentialsPendingMigration=YES;
+        }else credentialsPendingMigration=YES;
+    }
+    rows=[db executeQuery:@"PRAGMA user_version"];NSInteger version=[rows next] ? [rows intForColumnIndex:0] : 0;[rows close];
+    // Rebuild once to remove historical plaintext left in old free pages.
+    // Never vacuum/mark migration complete while a Keychain write is unavailable.
+    if(!credentialsPendingMigration && version<1 && !db.isInTransaction && [db executeUpdate:@"VACUUM"])[db executeUpdate:@"PRAGMA user_version=1"];
 }
 
 // Store a single favourite
@@ -156,43 +213,30 @@ static void MUDatabasePerform(dispatch_block_t block) {
 }
 
 + (void)storePassword:(NSString *)password forFavouriteWithPrimaryKey:(NSInteger)primaryKey {
-    if (primaryKey < 0 || !password.length) return;
+    if(primaryKey<0 || !password.length)return;
     MUDatabasePerform(^{
         [self openDatabaseIfNeeded];
-        [db executeUpdate:@"UPDATE `favourites` SET `password`=? WHERE `id`=?", password, @(primaryKey)];
+        FMResultSet *row=[db executeQuery:@"SELECT id FROM favourites WHERE id=?",@(primaryKey)];BOOL exists=[row next];[row close];
+        if(!exists)return;
+        OSStatus status=[MUCredentialStore setData:[password dataUsingEncoding:NSUTF8StringEncoding] forAccount:[self passwordAccount:primaryKey]];
+        if(status==errSecSuccess)[db executeUpdate:@"UPDATE favourites SET password=NULL WHERE id=?",@(primaryKey)];
+        else [MUCredentialStore reportFailure:status];
     });
 }
 
-+ (void) storeFavouriteOnQueue:(MUFavouriteServer *)favServ {
-    // If the favourite already has a primary key, update the currently stored entity
-    if ([favServ hasPrimaryKey]) {
-        [db executeUpdate:@"UPDATE `favourites` SET `name`=?, `hostname`=?, `port`=?, `username`=?, `password`=? WHERE `id`=?",
-            [favServ displayName],
-            [favServ hostName],
-            [NSString stringWithFormat:@"%lu", (unsigned long)[favServ port]],
-            [favServ userName],
-            [favServ password],
-            [NSNumber numberWithInteger:[favServ primaryKey]]];
-    // If it isn't already stored, store it and update the object's pkey.
-    } else {
-        // We're already inside a transaction if we were called from within
-        // storeFavourites. If that isn't the case, make sure we start a new
-        // transaction.
-        BOOL newTransaction = ![db isInTransaction];
-        if (newTransaction)
-            [db beginTransaction];
-        [db executeUpdate:@"INSERT INTO `favourites` (`name`, `hostname`, `port`, `username`, `password`) VALUES (?, ?, ?, ?, ?)",
-            [favServ displayName],
-            [favServ hostName],
-            [NSString stringWithFormat:@"%lu", (unsigned long)[favServ port]],
-            [favServ userName],
-            [favServ password]];
-        FMResultSet *res = [db executeQuery:@"SELECT last_insert_rowid()"];
-        [res next];
-        [favServ setPrimaryKey:[res intForColumnIndex:0]];
-        if (newTransaction)
-            [db commit];
++ (void)storeFavouriteOnQueue:(MUFavouriteServer *)server {
+    BOOL created=!server.hasPrimaryKey;
+    if(!credentialNamespace.length){[MUCredentialStore reportFailure:errSecNotAvailable];return;}
+    if(created){
+        if(![db executeUpdate:@"INSERT INTO favourites (name,hostname,port,username,password) VALUES (?,?,?,?,NULL)",server.displayName,server.hostName,@(server.port),server.userName])return;
+        server.primaryKey=(NSInteger)db.lastInsertRowId;
     }
+    OSStatus status=[MUCredentialStore setData:[server.password dataUsingEncoding:NSUTF8StringEncoding] forAccount:[self passwordAccount:server.primaryKey]];
+    if(status!=errSecSuccess){
+        if(created){[db executeUpdate:@"DELETE FROM favourites WHERE id=?",@(server.primaryKey)];server.primaryKey=-1;}
+        [MUCredentialStore reportFailure:status];return;
+    }
+    [db executeUpdate:@"UPDATE favourites SET name=?,hostname=?,port=?,username=?,password=NULL WHERE id=?",server.displayName,server.hostName,@(server.port),server.userName,@(server.primaryKey)];
 }
 
 // Delete a particular favourite
@@ -200,7 +244,9 @@ static void MUDatabasePerform(dispatch_block_t block) {
     MUDatabasePerform(^{
         [self openDatabaseIfNeeded];
         NSAssert([favServ hasPrimaryKey], @"Cannot delete a FavouriteServer not originated from the database.");
-        [db executeUpdate:@"DELETE FROM `favourites` WHERE `id`=?", [NSNumber numberWithInteger:[favServ primaryKey]]];
+        OSStatus status=[MUCredentialStore setData:nil forAccount:[self passwordAccount:favServ.primaryKey]];
+        if(status!=errSecSuccess){[MUCredentialStore reportFailure:status];return;}
+        [db executeUpdate:@"DELETE FROM `favourites` WHERE `id`=?", @(favServ.primaryKey)];
     });
 }
 
@@ -222,6 +268,7 @@ static void MUDatabasePerform(dispatch_block_t block) {
     MUDatabasePerform(^{
         [self openDatabaseIfNeeded];
         favs = [[NSMutableArray alloc] init];
+        if(credentialsPendingMigration)[self migrateCredentialsOnQueue];
         FMResultSet *res = [db executeQuery:@"SELECT `id`, `name`, `hostname`, `port`, `username`, `password` FROM `favourites`"];
         while ([res next]) {
             MUFavouriteServer *fs = [[MUFavouriteServer alloc] init];
@@ -230,7 +277,8 @@ static void MUDatabasePerform(dispatch_block_t block) {
             [fs setHostName:[res stringForColumnIndex:2]];
             [fs setPort:[res intForColumnIndex:3]];
             [fs setUserName:[res stringForColumnIndex:4]];
-            [fs setPassword:[res stringForColumnIndex:5]];
+            OSStatus status;NSData *secret=[MUCredentialStore dataForAccount:[self passwordAccount:fs.primaryKey] status:&status];
+            fs.password=status==errSecSuccess ? [[NSString alloc]initWithData:secret encoding:NSUTF8StringEncoding] : [res stringForColumnIndex:5];
             [favs addObject:fs];
         }
         [res close];
@@ -242,7 +290,7 @@ static void MUDatabasePerform(dispatch_block_t block) {
 #pragma mark Recent connections
 
 + (void)recordRecentServerWithHostname:(NSString *)hostname port:(NSUInteger)port displayName:(NSString *)displayName username:(NSString *)username {
-    NSString *host = [[hostname stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] lowercaseString];
+    NSString *host = MUHostnameKey(hostname);
     if (!host.length || port == 0 || port > UINT16_MAX) return;
     MUDatabasePerform(^{
         [self openDatabaseIfNeeded];
@@ -277,21 +325,43 @@ static void MUDatabasePerform(dispatch_block_t block) {
 #pragma mark Certificate verification
 
 + (void) storeDigest:(NSString *)hash forServerWithHostname:(NSString *)hostname port:(NSInteger)port {
+    NSString *host=MUHostnameKey(hostname);
+    if(!host.length || !hash.length || port<=0 || port>UINT16_MAX)return;
     MUDatabasePerform(^{
         [self openDatabaseIfNeeded];
-        [db executeUpdate:@"REPLACE INTO `cert` (`hostname`,`port`,`digest`) VALUES (?,?,?)",
-               hostname, [NSNumber numberWithInteger:port], hash];
+        if(![db beginTransaction])return;
+        // SQLite NOCASE only handles ASCII. Match legacy Unicode LAN names
+        // with the same normalization used for Recent, then remove variants.
+        FMResultSet *rows=[db executeQuery:@"SELECT `hostname` FROM `cert` WHERE `port`=?",@(port)];
+        NSMutableArray<NSString *> *variants=[NSMutableArray array];
+        BOOL saved=rows!=nil;
+        while([rows next]){
+            NSString *name=[rows stringForColumnIndex:0];
+            if([MUHostnameKey(name) isEqualToString:host])[variants addObject:name];
+        }
+        [rows close];
+        for(NSString *name in variants){
+            if(![db executeUpdate:@"DELETE FROM `cert` WHERE `hostname`=? AND `port`=?",name,@(port)]){saved=NO;break;}
+        }
+        if(saved)saved=[db executeUpdate:@"INSERT INTO `cert` (`hostname`,`port`,`digest`) VALUES (?,?,?)",host,@(port),hash];
+        if(!saved || ![db commit])[db rollback];
     });
 }
 
 + (NSString *) digestForServerWithHostname:(NSString *)hostname port:(NSInteger)port {
+    NSString *host=MUHostnameKey(hostname);
+    if(!host.length || port<=0 || port>UINT16_MAX)return nil;
     __block NSString *digest = nil;
     MUDatabasePerform(^{
         [self openDatabaseIfNeeded];
-        FMResultSet *result = [db executeQuery:@"SELECT `digest` FROM `cert` WHERE `hostname` = ? AND `port` = ?",
-                                     hostname, [NSNumber numberWithInteger:port]];
-        if ([result next]) {
-            digest = [result stringForColumnIndex:0];
+        // Read legacy mixed-case pins without discarding existing trust.
+        FMResultSet *result = [db executeQuery:@"SELECT `hostname`,`digest` FROM `cert` WHERE `port`=?",@(port)];
+        while ([result next]) {
+            if(![MUHostnameKey([result stringForColumnIndex:0]) isEqualToString:host])continue;
+            NSString *candidate=[result stringForColumnIndex:1];
+            // Conflicting legacy pins require a fresh explicit decision.
+            if(digest && ![digest isEqualToString:candidate]){digest=nil;break;}
+            digest=candidate;
         }
         [result close];
     });
@@ -326,43 +396,32 @@ static void MUDatabasePerform(dispatch_block_t block) {
 #pragma mark -
 #pragma mark Access tokens
 
-+ (void) storeAccessTokens:(NSArray *)tokens forServerWithHostname:(NSString *)hostname port:(NSInteger)port {
-    NSData *tokensJSON = nil;
-    if (tokens != nil) {
-        NSError *err = nil;
-        tokensJSON = [NSJSONSerialization dataWithJSONObject:tokens options:0 error:&err];
-        if (err != nil) {
-            NSLog(@"MUDatabase#storeAccessTokens:forServerWithHostname:port: %@", err);
-            return;
-        }
-    }
++ (void)storeAccessTokens:(NSArray *)tokens forServerWithHostname:(NSString *)hostname port:(NSInteger)port {
+    if(!hostname.length || port<=0 || port>UINT16_MAX)return;
+    for(id token in tokens)if(![token isKindOfClass:NSString.class])return;
+    NSData *data=tokens.count ? [NSJSONSerialization dataWithJSONObject:tokens options:0 error:nil] : nil;
     MUDatabasePerform(^{
         [self openDatabaseIfNeeded];
-        [db executeUpdate:@"REPLACE INTO `tokens` (`hostname`,`port`,`tokens`) VALUES (?,?,?)",
-            hostname, [NSNumber numberWithInteger:port], tokensJSON];
+        OSStatus status=credentialNamespace.length ? [MUCredentialStore setData:data forAccount:[self tokenAccount:hostname port:port]] : errSecNotAvailable;
+        if(status==errSecSuccess)[db executeUpdate:@"DELETE FROM tokens WHERE lower(hostname)=lower(?) AND port=?",hostname,@(port)];
+        else [MUCredentialStore reportFailure:status];
     });
 }
-
-+ (NSArray *) accessTokensForServerWithHostname:(NSString *)hostname port:(NSInteger)port {
-    __block NSArray *tokens = nil;
++ (NSArray *)accessTokensForServerWithHostname:(NSString *)hostname port:(NSInteger)port {
+    if(!hostname.length)return nil;
+    __block NSArray *tokens=nil;
     MUDatabasePerform(^{
-        [self openDatabaseIfNeeded];
-        FMResultSet *result = [db executeQuery:@"SELECT `tokens` FROM `tokens` WHERE `hostname` = ? AND `port` = ?",
-                               hostname, [NSNumber numberWithInteger:port]];
-        if ([result next]) {
-            NSError *err = nil;
-            NSData *tokensJSON = [result dataForColumnIndex:0];
-            if (tokensJSON != nil) {
-                tokens = [NSJSONSerialization JSONObjectWithData:tokensJSON options:0 error:&err];
-                if (err != nil) {
-                    NSLog(@"MUDatabase#accessTokensForServerWithHostname:port: %@", err);
-                    tokens = nil;
-                }
-            }
+        [self openDatabaseIfNeeded];if(credentialsPendingMigration)[self migrateCredentialsOnQueue];
+        OSStatus status;NSData *data=[MUCredentialStore dataForAccount:[self tokenAccount:hostname port:port] status:&status];
+        if(status!=errSecSuccess){
+            FMResultSet *row=[db executeQuery:@"SELECT tokens FROM tokens WHERE lower(hostname)=lower(?) AND port=? ORDER BY id DESC LIMIT 1",hostname,@(port)];
+            if([row next])data=[row dataForColumnIndex:0];[row close];
         }
-        [result close];
-    });
-    return tokens;
+        id decoded=data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        if([decoded isKindOfClass:NSArray.class]){
+            BOOL valid=YES;for(id value in decoded)if(![value isKindOfClass:NSString.class])valid=NO;
+            if(valid)tokens=decoded;
+        }
+    });return tokens;
 }
-
 @end

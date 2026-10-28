@@ -1,3 +1,4 @@
+#import <Network/Network.h>
 #import "MLInternal.hpp"
 #include "MLVoiceCrypt.hpp"
 #include "MLTransportTiming.hpp"
@@ -5,6 +6,7 @@
 #include <mumble/Lib.hpp>
 #include <mumble/PacketDataStream.hpp>
 #include <openssl/evp.h>
+#include <openssl/err.h>
 #include <netdb.h>
 #include <poll.h>
 #include <fcntl.h>
@@ -28,6 +30,7 @@ struct MLNetworkState {
     std::deque<MLVoiceFrame> voice;
     std::unordered_map<NSUInteger,MLVoiceActivity> pendingVoiceActivity;
     bool voiceActivityScheduled=false;
+    NSData *__strong expectedCertificate=nil;
     int wakeReader=-1, wakeWriter=-1;
     MLNetworkState() {
         int pair[2];
@@ -107,15 +110,25 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     NSString *_hostname;
     NSUInteger _port;
     BOOL _connected, _peerCertificateChainTrusted;
+    BOOL _automaticReconnectEnabled, _restoringSession, _hasJoinedSession;
+    NSString *_authenticationUsername, *_authenticationPassword;
+    NSArray *_authenticationTokens;
+    NSNumber *_resumeChannel;
+    BOOL _resumeMuted, _resumeDeafened, _desiredMuted, _desiredDeafened, _hasDesiredMuteState;
+    NSUInteger _reconnectAttempt, _reconnectGeneration, _pathSignature;
+    NSTimeInterval _reconnectStarted;
+    BOOL _hasPathSignature, _networkUnavailable;
+    NSTimer *_reconnectTimer;
+    nw_path_monitor_t _pathMonitor;
     NSArray<MLCertificate *> *_peerCertificates;
-    NSData *_acceptedCertificate;
+    NSData *_acceptedCertificate, *_sessionCertificate;
     NSString *_serverVersion, *_serverRelease, *_serverOSName, *_serverOSVersion;
 }
 - (instancetype)init {
     if ((self=[super init])) { _worker=dispatch_queue_create("info.mumble.libmumble.transport",DISPATCH_QUEUE_SERIAL); lib::init(); }
     return self;
 }
-- (void)dealloc { if (_state) _state->cancel(); lib::deinit(); }
+- (void)dealloc { [_reconnectTimer invalidate];if(_pathMonitor)nw_path_monitor_cancel(_pathMonitor);if (_state) _state->cancel(); lib::deinit(); }
 - (NSString *)hostname { return _hostname; }
 - (NSUInteger)port { return _port; }
 - (BOOL)connected { return _connected; }
@@ -134,9 +147,108 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
         if ([self networkState]==ownedState && !ownedState->halt) block();
     });
 }
+- (BOOL)automaticReconnectEnabled {return _automaticReconnectEnabled;}
+- (BOOL)isRestoringSession {return _restoringSession;}
+- (void)setAutomaticReconnectEnabled:(BOOL)enabled {
+    NSAssert(NSThread.isMainThread,@"Reconnect state belongs to the main thread");
+    _automaticReconnectEnabled=enabled;
+    if(!enabled){
+        ++_reconnectGeneration;[_reconnectTimer invalidate];_reconnectTimer=nil;
+        if(_pathMonitor){nw_path_monitor_cancel(_pathMonitor);_pathMonitor=nil;}
+        _hasPathSignature=NO;return;
+    }
+    [self startPathMonitoring];
+}
+- (void)startPathMonitoring {
+    if(_pathMonitor)return;
+    _pathMonitor=nw_path_monitor_create();__weak MLConnection *weakSelf=self;
+    nw_path_monitor_set_queue(_pathMonitor,dispatch_get_main_queue());
+    nw_path_monitor_set_update_handler(_pathMonitor,^(nw_path_t path){
+        MLConnection *owner=weakSelf;if(!owner || !owner->_automaticReconnectEnabled)return;
+        NSUInteger signature=nw_path_get_status(path)==nw_path_status_satisfied ? 1 : 0;
+        owner->_networkUnavailable=signature==0;
+        if(nw_path_uses_interface_type(path,nw_interface_type_wifi))signature|=2;
+        if(nw_path_uses_interface_type(path,nw_interface_type_cellular))signature|=4;
+        if(nw_path_uses_interface_type(path,nw_interface_type_wired))signature|=8;
+        [owner networkPathDidChangeSignature:signature available:!owner->_networkUnavailable];
+    });nw_path_monitor_start(_pathMonitor);
+}
+- (void)networkPathDidChangeSignature:(NSUInteger)signature available:(BOOL)available {
+    if(!_automaticReconnectEnabled)return;
+    BOOL changed=_hasPathSignature && signature!=_pathSignature;
+    _pathSignature=signature;_hasPathSignature=YES;_networkUnavailable=!available;
+    if(_hasJoinedSession && (changed || !available)){
+        if(_restoringSession){if(available)[self scheduleReconnectAfter:.15];}
+        else [self beginAutomaticReconnect];
+    }
+}
+- (void)disconnectTransport {
+    auto state=[self networkState];if(state)state->cancel();_connected=NO;
+    [[MLAudio sharedAudio]setMainConnectionForAudio:nil];
+}
 - (void)disconnect {
-    auto state=[self networkState]; if (state) state->cancel(); _connected=NO;
-    [[MLAudio sharedAudio] setMainConnectionForAudio:nil];
+    self.automaticReconnectEnabled=NO;_restoringSession=NO;_hasJoinedSession=NO;
+    _authenticationUsername=nil;_authenticationPassword=nil;_authenticationTokens=nil;
+    _hasDesiredMuteState=NO;_resumeChannel=nil;_sessionCertificate=nil;[self disconnectTransport];
+}
+- (void)beginAutomaticReconnect {
+    if(!_automaticReconnectEnabled || !_hasJoinedSession || _restoringSession)return;
+    MLUser *user=self.model.connectedUser;
+    _resumeChannel=user.channel ? @(user.channel.channelId) : nil;
+    _resumeMuted=_hasDesiredMuteState ? _desiredMuted : user.isSelfMuted;_resumeDeafened=_hasDesiredMuteState ? _desiredDeafened : user.isSelfDeafened;
+    _restoringSession=YES;_reconnectAttempt=0;_reconnectStarted=NSProcessInfo.processInfo.systemUptime;
+    [MLAudio.sharedAudio setForceTransmit:NO];[MLAudio.sharedAudio setLocalMuted:YES deafened:YES];
+    [self disconnectTransport];[self scheduleReconnectAfter:.5];
+}
+- (void)scheduleReconnectAfter:(NSTimeInterval)delay {
+    if(!_automaticReconnectEnabled || !_restoringSession)return;
+    [_reconnectTimer invalidate];NSUInteger generation=++_reconnectGeneration;
+    if([self.delegate respondsToSelector:@selector(connection:willReconnectAfterDelay:attempt:)])
+        [self.delegate connection:self willReconnectAfterDelay:delay attempt:_reconnectAttempt+1];
+    __weak MLConnection *weakSelf=self;
+    _reconnectTimer=[NSTimer timerWithTimeInterval:delay repeats:NO block:^(NSTimer *timer){
+        MLConnection *owner=weakSelf;if(!owner || generation!=owner->_reconnectGeneration || !owner->_automaticReconnectEnabled)return;
+        owner->_reconnectTimer=nil;
+        if(owner->_reconnectAttempt>=6 || NSProcessInfo.processInfo.systemUptime-owner->_reconnectStarted>180){
+            [owner finishReconnectWithError:MLNetworkError(NSLocalizedString(@"The server could not be reached",nil),(NSInteger)Code::Reach)];return;
+        }
+        if(owner->_networkUnavailable){[owner scheduleReconnectAfter:15];return;}
+        ++owner->_reconnectAttempt;[owner openTransportToHost:owner->_hostname port:owner->_port];
+    }];_reconnectTimer.tolerance=MIN(.25,delay*.1);[NSRunLoop.mainRunLoop addTimer:_reconnectTimer forMode:NSRunLoopCommonModes];
+}
+- (void)finishReconnectWithError:(NSError *)error {
+    self.automaticReconnectEnabled=NO;_restoringSession=NO;_hasJoinedSession=NO;
+    _authenticationUsername=nil;_authenticationPassword=nil;_authenticationTokens=nil;
+    [self disconnectTransport];
+    if([self.delegate respondsToSelector:@selector(connection:closedWithError:)])[self.delegate connection:self closedWithError:error];
+}
+- (void)transportFailed:(NSError *)error opened:(BOOL)opened retryable:(BOOL)retryable {
+    _connected=NO;
+    if(retryable && _automaticReconnectEnabled && _hasJoinedSession){
+        if(!_restoringSession)[self beginAutomaticReconnect];
+        else [self scheduleReconnectAfter:MIN(15,pow(2.0,MIN(_reconnectAttempt,4ul)))];
+        return;
+    }
+    if(_restoringSession){[self finishReconnectWithError:error];return;}
+    if(opened){if([self.delegate respondsToSelector:@selector(connection:closedWithError:)])[self.delegate connection:self closedWithError:error];}
+    else if([self.delegate respondsToSelector:@selector(connection:unableToConnectWithError:)])[self.delegate connection:self unableToConnectWithError:error];
+}
+- (void)rememberSelfMuted:(BOOL)muted deafened:(BOOL)deafened {
+    _hasDesiredMuteState=YES;_desiredMuted=muted || deafened;_desiredDeafened=deafened;
+    if(_restoringSession){_resumeMuted=_desiredMuted;_resumeDeafened=_desiredDeafened;}
+}
+- (void)restoreSessionForUser:(MLUser *)user {
+    if(!_restoringSession){_hasJoinedSession=YES;_sessionCertificate=[_peerCertificates.firstObject.certificate copy];[self rememberSelfMuted:user.isSelfMuted deafened:user.isSelfDeafened];return;}
+    user.selfMuted=_resumeMuted || _resumeDeafened;user.selfDeafened=_resumeDeafened;
+    MumbleTCP::UserState state;state.set_session((uint32_t)user.session);state.set_self_mute(user.isSelfMuted);state.set_self_deaf(user.isSelfDeafened);
+    if(_resumeChannel && [self.model channelWithId:_resumeChannel.unsignedIntegerValue])state.set_channel_id(_resumeChannel.unsignedIntValue);
+    [self sendProto:state];
+}
+- (void)didRestoreSession {
+    if(!_restoringSession)return;
+    _restoringSession=NO;_reconnectAttempt=0;_hasJoinedSession=YES;
+    [_reconnectTimer invalidate];_reconnectTimer=nil;++_reconnectGeneration;
+    if([self.delegate respondsToSelector:@selector(connectionDidRestoreSession:)])[self.delegate connectionDidRestoreSession:self];
 }
 - (void)queueReceivedVoice:(NSData *)data session:(NSUInteger)session sequence:(uint64_t)sequence talkState:(MLTalkState)talk terminator:(BOOL)terminator state:(const std::shared_ptr<MLNetworkState> &)state {
     if (state->halt || [self networkState]!=state) return;
@@ -162,6 +274,10 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
 }
 - (void)connectToHost:(NSString *)hostname port:(NSUInteger)port {
     [self disconnect];
+    [self openTransportToHost:hostname port:port];
+}
+- (void)openTransportToHost:(NSString *)hostname port:(NSUInteger)port {
+    [self disconnectTransport];
     if (![_hostname isEqual:hostname] || _port!=port) _acceptedCertificate=nil;
     _hostname=[hostname copy]; _port=port; _peerCertificates=@[]; _peerCertificateChainTrusted=NO;
     [self.model reset];
@@ -170,7 +286,8 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
             [self.delegate connection:self unableToConnectWithError:MLNetworkError(NSLocalizedString(@"Invalid server address or port", nil),(NSInteger)Code::Invalid)];
         return;
     }
-    auto state=std::make_shared<MLNetworkState>(); @synchronized(self) { _state=state; }
+    auto state=std::make_shared<MLNetworkState>();state->expectedCertificate=_restoringSession ? [_sessionCertificate copy] : nil;
+    @synchronized(self) { _state=state; }
     NSArray *identity=[self.certificateChain copy]; NSData *accepted=[_acceptedCertificate copy];
     dispatch_async(_worker, ^{ @autoreleasepool { [self run:state hostname:hostname identity:identity accepted:accepted]; } });
 }
@@ -184,9 +301,27 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     std::lock_guard guard(state->mutex); state->outgoing.emplace_back(packet.buf().begin(),packet.buf().end());
     state->wake();
 }
+- (void)transportOpened {
+    _connected=YES;
+    if(_restoringSession)[self authenticateWithUsername:_authenticationUsername password:_authenticationPassword accessTokens:_authenticationTokens];
+    else if([self.delegate respondsToSelector:@selector(connectionOpened:)])[self.delegate connectionOpened:self];
+}
+- (void)handleRejectedReason:(MLRejectReason)reason explanation:(NSString *)explanation {
+    if(_restoringSession){[self finishReconnectWithError:MLNetworkError(explanation.length ? explanation : NSLocalizedString(@"Connection Rejected",nil),(NSInteger)reason)];return;}
+    if([self.delegate respondsToSelector:@selector(connection:rejectedWithReason:explanation:)])[self.delegate connection:self rejectedWithReason:reason explanation:explanation];
+}
+- (void)handleUntrustedCertificates:(NSArray *)peer {
+    if(_restoringSession){[self finishReconnectWithError:MLNetworkError(NSLocalizedString(@"Unable to validate server certificate",nil),(NSInteger)Code::Invalid)];return;}
+    if([self.delegate respondsToSelector:@selector(connection:trustFailureInCertificateChain:)])[self.delegate connection:self trustFailureInCertificateChain:peer];
+}
 - (void)authenticateWithUsername:(NSString *)username password:(NSString *)password accessTokens:(NSArray *)tokens {
+    _authenticationUsername=[username copy];_authenticationPassword=[password copy];_authenticationTokens=[tokens copy];
     MumbleTCP::Authenticate message; message.set_username(MLUTF8(username)); message.set_password(MLUTF8(password)); message.set_opus(true);
     for (NSString *token in tokens) message.add_tokens(MLUTF8(token)); [self sendProto:message];
+}
+- (void)updateAccessTokens:(NSArray *)tokens {
+    _authenticationTokens=[tokens copy];MumbleTCP::Authenticate message;
+    for(NSString *token in tokens)message.add_tokens(MLUTF8(token));[self sendProto:message];
 }
 - (void)sendOpus:(NSData *)data sequence:(uint64_t)sequence terminator:(BOOL)terminator {
     auto state=[self networkState]; if (!state || state->halt) return;
@@ -197,19 +332,19 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     state->wake();
 }
 - (void)run:(std::shared_ptr<MLNetworkState>)state hostname:(NSString *)hostname identity:(NSArray *)identity accepted:(NSData *)accepted {
+    if(state->halt)return;
     sockaddr_storage remote{}; socklen_t remoteLength=0;
     int fd=MLConnect(hostname,self.port,*state,remote,remoteLength);
     if (fd<0) {
-        [self deliver:state block:^{ if ([self.delegate respondsToSelector:@selector(connection:unableToConnectWithError:)])
-            [self.delegate connection:self unableToConnectWithError:MLNetworkError(NSLocalizedString(@"The server could not be reached", nil),(NSInteger)Code::Reach)]; }]; return;
+        [self deliver:state block:^{ [self transportFailed:MLNetworkError(NSLocalizedString(@"The server could not be reached",nil),(NSInteger)Code::Reach) opened:NO retryable:YES]; }]; return;
     }
     auto connection=std::make_unique<Connection>(fd,false);
     auto cleanup=[&]() { std::lock_guard guard(state->mutex); state->socket=-1; connection.reset(); };
     if (!*connection || !MLSetIdentity(*connection,identity) || !connection->setServerName(MLUTF8(hostname))) {
-        cleanup(); [self deliver:state block:^{ if ([self.delegate respondsToSelector:@selector(connection:unableToConnectWithError:)])
-            [self.delegate connection:self unableToConnectWithError:MLNetworkError(NSLocalizedString(@"Unable to load the client identity or initialize TLS", nil),(NSInteger)Code::Init)]; }]; return;
+        cleanup(); [self deliver:state block:^{ [self transportFailed:MLNetworkError(NSLocalizedString(@"Unable to load the client identity or initialize TLS",nil),(NSInteger)Code::Init) opened:NO retryable:NO]; }]; return;
     }
     bool modernVoice=false, synchronized=false, rejected=false;
+    uint32_t ownSession=UINT32_MAX;
     MLVoiceCrypt crypt;
     int udp=-1;
     MLClock::time_point lastUDP{}, lastPacket=MLClock::now(), lastPing=MLClock::now(), lastResync{}, lastVoice{};
@@ -260,7 +395,7 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
             case tcp::Message::Type::Reject: {
                 MumbleTCP::Reject message; if (!message.ParseFromArray(data.bytes,(int)data.length)) break;
                 rejected=true; MLRejectReason reason=(MLRejectReason)message.type(); NSString *explanation=MLString(message.reason());
-                [self deliver:state block:^{ if ([self.delegate respondsToSelector:@selector(connection:rejectedWithReason:explanation:)]) [self.delegate connection:self rejectedWithReason:reason explanation:explanation]; }]; break;
+                [self deliver:state block:^{[self handleRejectedReason:reason explanation:explanation];}]; break;
             }
             case tcp::Message::Type::CryptSetup: {
                 MumbleTCP::CryptSetup message; if (!message.ParseFromArray(data.bytes,(int)data.length)) break;
@@ -273,6 +408,17 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
                 break;
             }
             case tcp::Message::Type::UDPTunnel: { receiveVoice(Buf(packet.data().begin(),packet.data().end())); break; }
+            case tcp::Message::Type::UserRemove: {
+                MumbleTCP::UserRemove message;
+                if(message.ParseFromArray(data.bytes,(int)data.length) && message.session()==ownSession){
+                    rejected=true;[self deliver:state block:^{
+                        self.automaticReconnectEnabled=NO;self->_restoringSession=NO;self->_hasJoinedSession=NO;
+                        [self.model receiveType:type data:data];
+                        if(!state->halt)[self finishReconnectWithError:MLNetworkError(MLString(message.reason()).length ? MLString(message.reason()) : NSLocalizedString(@"Connection closed",nil),(NSInteger)Code::Disconnect)];
+                    }];
+                }else [self deliver:state block:^{[self.model receiveType:type data:data];}];
+                break;
+            }
             case tcp::Message::Type::CodecVersion: {
                 MumbleTCP::CodecVersion message;
                 if (message.ParseFromArray(data.bytes,(int)data.length) && !message.opus()) failure=Code::Unsupport;
@@ -281,7 +427,7 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
             case tcp::Message::Type::ServerSync: {
                 MumbleTCP::ServerSync message;
                 if (message.ParseFromArray(data.bytes,(int)data.length)) {
-                    synchronized=true; uint32_t bandwidth=message.max_bandwidth();
+                    synchronized=true;ownSession=message.session();uint32_t bandwidth=message.max_bandwidth();
                     [self deliver:state block:^{ [[MLAudio sharedAudio] setBandwidthLimit:bandwidth]; }];
                 }
                 [[fallthrough]];
@@ -291,8 +437,15 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     };
     Code handshake=(*connection)(feedback,[&](){ return state->halt.load(); });
     if (handshake!=Code::Success) {
-        cleanup(); [self deliver:state block:^{ if ([self.delegate respondsToSelector:@selector(connection:unableToConnectWithError:)])
-            [self.delegate connection:self unableToConnectWithError:MLNetworkError(NSLocalizedString(@"TLS negotiation failed", nil),(NSInteger)handshake)]; }]; return;
+        // SSL teardown may clear the thread-local error queue. Record the
+        // reason first, without logging the endpoint, identity or credentials.
+        if (!state->halt && handshake!=Code::Cancel) {
+            unsigned long tlsCode=ERR_peek_last_error();
+            char reason[256]{};
+            if(tlsCode)ERR_error_string_n(tlsCode,reason,sizeof(reason));
+            NSLog(@"TLS handshake failed: transport=%d, OpenSSL=%s",(int)handshake,tlsCode ? reason : "no queued TLS error");
+        }
+        cleanup(); [self deliver:state block:^{ [self transportFailed:MLNetworkError(NSLocalizedString(@"TLS negotiation failed",nil),(NSInteger)handshake) opened:NO retryable:YES]; }]; return;
     }
     NSMutableArray *peer=[NSMutableArray array], *systemCertificates=[NSMutableArray array];
     for (auto &certificate:connection->peerCert()) {
@@ -305,13 +458,16 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     if (trust) CFRelease(trust); CFRelease(policy);
     BOOL acceptedLeaf=accepted.length && [accepted isEqualToData:[peer.firstObject certificate]];
     [self deliver:state block:^{ self->_peerCertificates=[peer copy]; self->_peerCertificateChainTrusted=trusted; }];
+    if(state->expectedCertificate.length && ![state->expectedCertificate isEqualToData:[(MLCertificate *)peer.firstObject certificate]]){
+        cleanup();[self deliver:state block:^{[self finishReconnectWithError:MLNetworkError(NSLocalizedString(@"The server certificate changed. Reconnect manually to review it.",nil),(NSInteger)Code::Invalid)];}];return;
+    }
     if (!trusted && !acceptedLeaf) {
-        cleanup(); [self deliver:state block:^{ if ([self.delegate respondsToSelector:@selector(connection:trustFailureInCertificateChain:)]) [self.delegate connection:self trustFailureInCertificateChain:peer]; }]; return;
+        cleanup(); [self deliver:state block:^{[self handleUntrustedCertificates:peer];}]; return;
     }
     MumbleTCP::Version version; version.set_version_v1(lib::version().blob32()); version.set_version_v2(lib::version().blob64());
     version.set_release(MLUTF8(MLVersion.sharedVersion.releaseString)); version.set_os("iOS");
     failure=write(version);
-    [self deliver:state block:^{ self->_connected=YES; if ([self.delegate respondsToSelector:@selector(connectionOpened:)]) [self.delegate connectionOpened:self]; }];
+    [self deliver:state block:^{[self transportOpened];}];
     udp=socket(remote.ss_family,SOCK_DGRAM,IPPROTO_UDP);
     if (udp>=0) { fcntl(udp,F_SETFL,fcntl(udp,F_GETFL,0)|O_NONBLOCK); if (connect(udp,(sockaddr *)&remote,remoteLength)) { close(udp); udp=-1; } }
     auto sendVoice=[&](BufViewConst plain) {
@@ -382,8 +538,8 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     if (!rejected) [self deliver:state block:^{
         self->_connected=NO; [[MLAudio sharedAudio] setMainConnectionForAudio:nil];
         NSString *description=failure==Code::Unsupport ? NSLocalizedString(@"The server does not support Opus audio.", nil) : NSLocalizedString(@"The connection was interrupted", nil);
-        NSError *error=failure==Code::Disconnect ? nil : MLNetworkError(description,(NSInteger)failure);
-        if ([self.delegate respondsToSelector:@selector(connection:closedWithError:)]) [self.delegate connection:self closedWithError:error];
+        NSError *error=MLNetworkError(description,(NSInteger)failure);
+        [self transportFailed:error opened:YES retryable:failure!=Code::Unsupport];
     }];
 }
 @end
