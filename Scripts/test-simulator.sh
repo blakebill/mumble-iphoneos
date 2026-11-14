@@ -6,7 +6,7 @@ app="${1:?Usage: bash Scripts/test-simulator.sh /path/to/isolated/Mumble.app}"
 reports="${2:-$(mktemp -d "${TMPDIR:-/tmp}/mumble-simulator-reports.XXXXXX")}"
 configuration="$(mktemp -d "${TMPDIR:-/tmp}/mumble-simulator-config.XXXXXX")"
 mkdir -p "$reports"
-bundle=com.blakebill.mumble.audio-lifecycle-tests
+bundle=com.rubycore.mumble.audio-lifecycle-tests
 primary_device=""; duo_device=""
 cleanup() {
     for device in "$primary_device" "$duo_device"; do

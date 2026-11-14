@@ -19,7 +19,7 @@ static dispatch_queue_t MUDatabaseQueue(void) {
     static dispatch_queue_t queue;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        queue = dispatch_queue_create("info.mumble.database", DISPATCH_QUEUE_SERIAL);
+        queue = dispatch_queue_create("com.rubycore.mumble.database", DISPATCH_QUEUE_SERIAL);
         dispatch_queue_set_specific(queue, MUDatabaseQueueKey, MUDatabaseQueueKey, NULL);
     });
     return queue;

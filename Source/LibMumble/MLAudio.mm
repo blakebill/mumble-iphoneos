@@ -107,8 +107,8 @@ static BOOL MLRequiresGraphRebuild(const MLAudioSettings &previous,const MLAudio
 + (instancetype)sharedAudio { static MLAudio *audio; static dispatch_once_t once; dispatch_once(&once, ^{ audio=[self new]; }); return audio; }
 - (instancetype)init {
     if ((self=[super init])) {
-        _queue=dispatch_queue_create("info.mumble.libmumble.audio",dispatch_queue_attr_make_with_autorelease_frequency(DISPATCH_QUEUE_SERIAL,DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM));
-        _sessionQueue=dispatch_queue_create("info.mumble.libmumble.audio-session",DISPATCH_QUEUE_SERIAL);
+        _queue=dispatch_queue_create("com.rubycore.mumble.libmumble.audio",dispatch_queue_attr_make_with_autorelease_frequency(DISPATCH_QUEUE_SERIAL,DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM));
+        _sessionQueue=dispatch_queue_create("com.rubycore.mumble.libmumble.audio-session",DISPATCH_QUEUE_SERIAL);
         _players=[NSMutableDictionary dictionary];
         _enginePhase=MLAudioEnginePhase::Idle;_sessionOperation=MLAudioSessionOperation::None;
         _engineStopCompletions=[NSMutableArray array];

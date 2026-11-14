@@ -133,7 +133,7 @@ These builds and automated checks passed during the initial audit. Device instal
 Validation entry points:
 
 ```sh
-xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator -derivedDataPath /tmp/mumble-onboarding-test CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- PRODUCT_BUNDLE_IDENTIFIER=com.blakebill.mumble.audio-lifecycle-tests build
+xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator -derivedDataPath /tmp/mumble-onboarding-test CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- PRODUCT_BUNDLE_IDENTIFIER=com.rubycore.mumble.audio-lifecycle-tests build
 bash Scripts/test-ui-interface.sh /tmp/mumble-onboarding-test/Build/Products/Debug-iphonesimulator/Mumble.app
 ```
 

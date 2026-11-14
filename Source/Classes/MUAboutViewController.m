@@ -33,7 +33,7 @@
     UIListContentConfiguration *content;
     if (indexPath.section == 0) {
         content = [UIListContentConfiguration subtitleCellConfiguration];
-        content.text = @"Mumble";
+        content.text = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
         content.textProperties.font = [UIFont preferredFontForTextStyle:UIFontTextStyleTitle1];
         NSString *version = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
         content.secondaryText = [NSString stringWithFormat:@"%@\n%@", version, NSLocalizedString(@"Low latency, high quality voice chat", nil)];
@@ -61,7 +61,7 @@
         UINavigationController *navigation = [[UINavigationController alloc] initWithRootViewController:[MULegalViewController new]];
         [self presentViewController:navigation animated:YES completion:nil];
     } else {
-        NSString *address = indexPath.row == 0 ? @"https://www.mumble.info/" : @"https://github.com/mumble-voip/mumble-iphoneos/issues";
+        NSString *address = indexPath.row == 0 ? @"https://github.com/blakebill/mumble-iphoneos" : @"https://github.com/blakebill/mumble-iphoneos/issues";
         [UIApplication.sharedApplication openURL:[NSURL URLWithString:address] options:@{} completionHandler:nil];
     }
 }

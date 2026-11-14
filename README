@@ -65,7 +65,7 @@ The Simulator regressions use a separate, ad-hoc signed app so certificate tests
 have Simulator Keychain entitlements. Build and run the complete suite with:
 
 ```sh
-xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator -derivedDataPath /tmp/mumble-tests PRODUCT_BUNDLE_IDENTIFIER=com.blakebill.mumble.audio-lifecycle-tests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
+xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug -sdk iphonesimulator -derivedDataPath /tmp/mumble-tests PRODUCT_BUNDLE_IDENTIFIER=com.rubycore.mumble.audio-lifecycle-tests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
 bash Scripts/test-simulator.sh /tmp/mumble-tests/Build/Products/Debug-iphonesimulator/Mumble.app
 ```
 
@@ -88,3 +88,6 @@ iOS 18; older iOS versions use compatibility paths and a static app icon.
 
 This project originates from the [Mumble iOS application](https://github.com/mumble-voip/mumble-iphoneos).
 Mumble is an open-source voice chat application: [mumble.info](https://www.mumble.info/).
+
+App Store release materials and the English Hexo privacy policy are in
+[Distribution/AppStore](Distribution/AppStore/README.md).

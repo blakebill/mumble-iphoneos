@@ -5,12 +5,12 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 app="${1:?Usage: test-duo-layout.sh /path/to/Simulator/Mumble.app}"
 device="${MU_TEST_DEVICE:-booted}"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/mumble-duo-tests.XXXXXX")"
-bundle=com.blakebill.mumble.audio-lifecycle-tests
+bundle=com.rubycore.mumble.audio-lifecycle-tests
 python3 - "$app/Info.plist" "$bundle" <<'PY'
 import plistlib,sys
 from pathlib import Path
 if plistlib.loads(Path(sys.argv[1]).read_bytes()).get('CFBundleIdentifier') != sys.argv[2]:
-    raise SystemExit('Build the isolated com.blakebill.mumble.audio-lifecycle-tests host before running the Duo fixture.')
+    raise SystemExit('Build the isolated com.rubycore.mumble.audio-lifecycle-tests host before running the Duo fixture.')
 PY
 xcrun --sdk iphonesimulator clang -arch arm64 -mios-simulator-version-min=27.1 \
     -fobjc-arc -dynamiclib -undefined dynamic_lookup -framework UIKit -framework Foundation \

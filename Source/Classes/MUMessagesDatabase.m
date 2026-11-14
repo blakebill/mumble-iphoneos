@@ -5,7 +5,7 @@
 #import "MUTextMessage.h"
 #import "MUDataURL.h"
 #import "MLClient.h"
-#import <FMDB/FMDatabase.h>
+#import "FMDatabase.h"
 @import ImageIO;
 
 @interface MUStoredMessage : NSObject
@@ -63,7 +63,7 @@ static MUTextMessage *MUMessageWithImages(MUTextMessage *metadata, NSArray<UIIma
     if ((self=[super init])) {
         _records=[NSMutableArray array];_previewRequests=[NSMutableDictionary dictionary];
         _previewCache=[NSCache new];_previewCache.countLimit=128;_previewCache.totalCostLimit=24*1024*1024;
-        _queue=dispatch_queue_create("info.mumble.messages",dispatch_queue_attr_make_with_autorelease_frequency(DISPATCH_QUEUE_SERIAL,DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM));
+        _queue=dispatch_queue_create("com.rubycore.mumble.messages",dispatch_queue_attr_make_with_autorelease_frequency(DISPATCH_QUEUE_SERIAL,DISPATCH_AUTORELEASE_FREQUENCY_WORK_ITEM));
         NSString *path=[NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"msg-%@.db",NSUUID.UUID.UUIDString]];
         _db=[[FMDatabase alloc]initWithPath:path];
         dispatch_async(_queue, ^{

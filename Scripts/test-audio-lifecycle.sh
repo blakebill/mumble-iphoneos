@@ -7,7 +7,7 @@ app_path="${1:?Usage: bash Scripts/test-audio-lifecycle.sh /path/to/Simulator/Mu
 test_mode="${2:-async}"
 [[ "$test_mode" == async || "$test_mode" == legacy ]] || { printf 'Mode must be async or legacy\n' >&2; exit 1; }
 validation_dir="$(mktemp -d "${TMPDIR:-/tmp}/mumble-audio-tests.XXXXXX")"
-validation_bundle="com.blakebill.mumble.audio-lifecycle-tests"
+validation_bundle="com.rubycore.mumble.audio-lifecycle-tests"
 trap 'xcrun simctl terminate "$validation_device" "$validation_bundle" >/dev/null 2>&1 || true' EXIT
 xcrun --sdk iphonesimulator clang -arch arm64 -mios-simulator-version-min=27.0 \
     -std=c++20 -fobjc-arc -dynamiclib -undefined dynamic_lookup \

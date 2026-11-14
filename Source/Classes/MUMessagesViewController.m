@@ -820,7 +820,7 @@
             content.title = [user userName];
         }
         
-        UNNotificationRequest *notificationReq = [UNNotificationRequest requestWithIdentifier:@"com.blakebill.mumble.TextMessageNotification"
+        UNNotificationRequest *notificationReq = [UNNotificationRequest requestWithIdentifier:@"com.rubycore.mumble.TextMessageNotification"
                                                                                      content:content
                                                                                      trigger:nil];
         [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:notificationReq withCompletionHandler:nil];

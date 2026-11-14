@@ -7,13 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3DBB6F3632592282635951E9 /* MUConnectionPresentation.m in Sources */ = {isa = PBXBuildFile; fileRef = 69B44537627BDB9E5C5CA418 /* MUConnectionPresentation.m */; };
-		23760E49BC4540BBA4834FE0 /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ECAB5B25D29742FBAB6BF8C1 /* Network.framework */; };
-		A51D8C993C49B1AAABC5F2AC /* MUCredentialStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 88231565FB357F7CC4EE5B28 /* MUCredentialStore.m */; };
 		0E9B09F2304DCCE300682498 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E9B09E9304DCCE300682498 /* WebKit.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		0EEEF3B42DF1E5450042C0A8 /* libFMDB-IOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0EEEF35C2DF1DC6D0042C0A8 /* libFMDB-IOS.a */; };
 		0EF3A4672DC2573900028454 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2861C2AD116BE9B5002B8514 /* AudioToolbox.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		1D60589B0D05DD56006BFB54 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; };
+		23760E49BC4540BBA4834FE0 /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ECAB5B25D29742FBAB6BF8C1 /* Network.framework */; };
 		2801C35B11CA9F1A00E664E8 /* MUPreferencesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2801C35A11CA9F1A00E664E8 /* MUPreferencesViewController.m */; };
 		280256381510D70D00178B08 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 280256361510D70D00178B08 /* Localizable.strings */; };
 		2802AC0014C9E948000983A5 /* MUDataURL.m in Sources */ = {isa = PBXBuildFile; fileRef = 2802ABFF14C9E948000983A5 /* MUDataURL.m */; };
@@ -63,6 +61,7 @@
 		28F79C70147973D60003B8BA /* MUUserStateAcessoryView.m in Sources */ = {isa = PBXBuildFile; fileRef = 28F79C6F147973D50003B8BA /* MUUserStateAcessoryView.m */; };
 		28F79C73147991490003B8BA /* MUAccessTokenViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 28F79C72147991480003B8BA /* MUAccessTokenViewController.m */; };
 		28F79CA9147AB62B0003B8BA /* MUNotificationController.m in Sources */ = {isa = PBXBuildFile; fileRef = 28F79CA8147AB6280003B8BA /* MUNotificationController.m */; };
+		3DBB6F3632592282635951E9 /* MUConnectionPresentation.m in Sources */ = {isa = PBXBuildFile; fileRef = 69B44537627BDB9E5C5CA418 /* MUConnectionPresentation.m */; };
 		6C9E5E1C48EA8D4BDF94303A /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 69E1F121FF30BD1D7DD51485 /* InfoPlist.strings */; };
 		A15000000000000000000003 /* MUAppMenuViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000002 /* MUAppMenuViewController.m */; };
 		A15000000000000000000013 /* MUAboutViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A15000000000000000000012 /* MUAboutViewController.m */; };
@@ -76,6 +75,7 @@
 		A1B2C3D4000000000000006C /* MLServerPinger.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000008 /* MLServerPinger.mm */; };
 		A1B2C3D400000000000000C9 /* Dependencies/Generated/libmumble.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000C8 /* Dependencies/Generated/libmumble.xcframework */; };
 		A1C0F0000000000000000001 /* Resources/AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A1C0F0000000000000000002 /* Resources/AppIcon.icon */; };
+		A51D8C993C49B1AAABC5F2AC /* MUCredentialStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 88231565FB357F7CC4EE5B28 /* MUCredentialStore.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -145,11 +145,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		69B44537627BDB9E5C5CA418 /* MUConnectionPresentation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUConnectionPresentation.m; sourceTree = "<group>"; };
-		39D01DA6FE8EBDAB9E84BAD4 /* MUConnectionPresentation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUConnectionPresentation.h; sourceTree = "<group>"; };
-		ECAB5B25D29742FBAB6BF8C1 /* Network.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Network.framework; path = System/Library/Frameworks/Network.framework; sourceTree = SDKROOT; };
-		88231565FB357F7CC4EE5B28 /* MUCredentialStore.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUCredentialStore.m; sourceTree = "<group>"; };
-		50F96E27BD2433C66B65AB9F /* MUCredentialStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUCredentialStore.h; sourceTree = "<group>"; };
 		00F3E7F83255D85038ECBFA3 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = Resources/es.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
 		06E21CAE8B3A2863AB8760AC /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "Resources/pt-BR.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
 		0A7400A23453F15884B2FF7D /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
@@ -265,10 +260,14 @@
 		2968D605B138A536E9172B35 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = da; path = Resources/da.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
 		29B97316FDCFA39411CA2CEA /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = main.m; path = Source/main.m; sourceTree = "<group>"; };
 		32CA4F630368D1EE00C91783 /* Mumble.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Mumble.pch; path = Source/Mumble.pch; sourceTree = "<group>"; };
+		39D01DA6FE8EBDAB9E84BAD4 /* MUConnectionPresentation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUConnectionPresentation.h; sourceTree = "<group>"; };
 		3C1307D965C70820CFA03560 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = Resources/fr.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
+		50F96E27BD2433C66B65AB9F /* MUCredentialStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MUCredentialStore.h; sourceTree = "<group>"; };
 		5F723DC62BA77D5250909D3D /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = Resources/de.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
 		63E41634EEF3820DA81CD6B1 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = Resources/ko.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		69B44537627BDB9E5C5CA418 /* MUConnectionPresentation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUConnectionPresentation.m; sourceTree = "<group>"; };
 		8457E91FC99E214646E64F62 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/Localizable.strings"; sourceTree = SOURCE_ROOT; };
+		88231565FB357F7CC4EE5B28 /* MUCredentialStore.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MUCredentialStore.m; sourceTree = "<group>"; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Source/Info.plist; plistStructureDefinitionIdentifier = "com.apple.xcode.plist.structure-definition.iphone.info-plist"; sourceTree = "<group>"; };
 		90F07D65278F455FC306BC99 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = Resources/ja.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
 		99CA9D5D45C925E4FA95E48F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = Resources/en.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
@@ -300,6 +299,7 @@
 		C432766553F7FA3D6EEAFE52 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = Resources/ja.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
 		D96FA7394EBDA7FFF1131729 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = Resources/ru.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
 		DF89BE8B3E7BD80AB6918049 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = Resources/fr.lproj/Localizable.strings; sourceTree = SOURCE_ROOT; };
+		ECAB5B25D29742FBAB6BF8C1 /* Network.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Network.framework; path = System/Library/Frameworks/Network.framework; sourceTree = SDKROOT; };
 		F674C7AB2736F25D364033D0 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = Resources/es.lproj/InfoPlist.strings; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -827,7 +827,9 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = 4PL7RDQQRX;
+				DEVELOPMENT_TEAM = 49BL57727Q;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mumble (new)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rubycore.mumble;
 				PROVISIONING_PROFILE = "";
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -838,7 +840,9 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = 4PL7RDQQRX;
+				DEVELOPMENT_TEAM = 49BL57727Q;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mumble (new)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.rubycore.mumble;
 				PROVISIONING_PROFILE = "";
 				TARGETED_DEVICE_FAMILY = 1;
 			};

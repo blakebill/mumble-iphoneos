@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 app_path="${1:?Usage: bash Scripts/test-server-list.sh /path/to/Simulator/Mumble.app}"
 validation_dir="$(mktemp -d "${TMPDIR:-/tmp}/mumble-server-tests.XXXXXX")"
 # Reuse the existing isolated test bundle; generated apps never enter the repo.
-validation_bundle="com.blakebill.mumble.audio-lifecycle-tests"
+validation_bundle="com.rubycore.mumble.audio-lifecycle-tests"
 trap 'xcrun simctl terminate "$validation_device" "$validation_bundle" >/dev/null 2>&1 || true' EXIT
 xcrun --sdk iphonesimulator clang -arch arm64 -mios-simulator-version-min=27.0 \
     -fobjc-arc -dynamiclib -undefined dynamic_lookup -framework UIKit -framework Foundation \

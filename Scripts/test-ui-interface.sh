@@ -12,17 +12,17 @@ import shutil,plistlib,sys
 source=Path(sys.argv[1])
 destination=Path(sys.argv[2])
 host_info=plistlib.loads((source/'Info.plist').read_bytes())
-if host_info.get('CFBundleIdentifier')!='com.blakebill.mumble.audio-lifecycle-tests' or b'__entitlements' not in (source/host_info['CFBundleExecutable']).read_bytes():
-    raise SystemExit('Build the isolated Simulator host with CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- PRODUCT_BUNDLE_IDENTIFIER=com.blakebill.mumble.audio-lifecycle-tests before running the UI/certificate audit.')
+if host_info.get('CFBundleIdentifier')!='com.rubycore.mumble.audio-lifecycle-tests' or b'__entitlements' not in (source/host_info['CFBundleExecutable']).read_bytes():
+    raise SystemExit('Build the isolated Simulator host with CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- PRODUCT_BUNDLE_IDENTIFIER=com.rubycore.mumble.audio-lifecycle-tests before running the UI/certificate audit.')
 if destination.exists(): shutil.rmtree(destination)
 shutil.copytree(source,destination)
 p=destination/'Info.plist'
-info=plistlib.loads(p.read_bytes());info['CFBundleIdentifier']='com.blakebill.mumble.audio-lifecycle-tests';info['CFBundleDisplayName']='Mumble Audio Tests';info.pop('CFBundleURLTypes',None);p.write_bytes(plistlib.dumps(info))
+info=plistlib.loads(p.read_bytes());info['CFBundleIdentifier']='com.rubycore.mumble.audio-lifecycle-tests';info['CFBundleDisplayName']='Mumble Audio Tests';info.pop('CFBundleURLTypes',None);p.write_bytes(plistlib.dumps(info))
 PY
 # Certificate tests require a Simulator build with signing enabled, so Xcode
 # embeds simulated Keychain entitlements. Use the isolated bundle identifier
-# com.blakebill.mumble.audio-lifecycle-tests when building that test host.
-validation_bundle=com.blakebill.mumble.audio-lifecycle-tests
+# com.rubycore.mumble.audio-lifecycle-tests when building that test host.
+validation_bundle=com.rubycore.mumble.audio-lifecycle-tests
 xcrun simctl terminate "$validation_device" "$validation_bundle" >/dev/null 2>&1 || true
 xcrun simctl install "$validation_device" "$validation_root/Mumble.app"
 validation_data=$(xcrun simctl get_app_container "$validation_device" "$validation_bundle" data)

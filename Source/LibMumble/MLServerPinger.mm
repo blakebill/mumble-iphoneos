@@ -12,7 +12,7 @@
 }
 - (instancetype)initWithHostname:(NSString *)hostname port:(NSString *)port {
     if ((self=[super init])) {
-        _socket=-1; _queue=dispatch_queue_create("info.mumble.libmumble.pinger",DISPATCH_QUEUE_SERIAL);
+        _socket=-1; _queue=dispatch_queue_create("com.rubycore.mumble.libmumble.pinger",DISPATCH_QUEUE_SERIAL);
         __weak MLServerPinger *weakSelf=self;
         dispatch_async(_queue, ^{ @autoreleasepool {
             addrinfo hints{}; hints.ai_socktype=SOCK_DGRAM; hints.ai_family=AF_UNSPEC; addrinfo *addresses=nullptr;

@@ -47,7 +47,7 @@ Build the isolated host:
 ```sh
 xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Debug \
   -sdk iphonesimulator -derivedDataPath /tmp/mumble-duo-sim \
-  PRODUCT_BUNDLE_IDENTIFIER=com.blakebill.mumble.audio-lifecycle-tests \
+  PRODUCT_BUNDLE_IDENTIFIER=com.rubycore.mumble.audio-lifecycle-tests \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
 ```
 

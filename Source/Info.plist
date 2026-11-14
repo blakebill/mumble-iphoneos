@@ -7,7 +7,7 @@
 	<key>UIPrefersShowingLanguageSettings</key>
 	<true/>
 	<key>CFBundleDisplayName</key>
-	<string>${PRODUCT_NAME}</string>
+	<string>Mumble (new)</string>
 	<key>CFBundleExecutable</key>
 	<string>${EXECUTABLE_NAME}</string>
 	<key>CFBundleIdentifier</key>
@@ -26,7 +26,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.blakebill.mumble</string>
+			<string>com.rubycore.mumble</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>mumble</string>

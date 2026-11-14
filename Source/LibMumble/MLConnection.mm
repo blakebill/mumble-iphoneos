@@ -125,7 +125,7 @@ static bool MLSetIdentity(Connection &connection, NSArray *identities) {
     NSString *_serverVersion, *_serverRelease, *_serverOSName, *_serverOSVersion;
 }
 - (instancetype)init {
-    if ((self=[super init])) { _worker=dispatch_queue_create("info.mumble.libmumble.transport",DISPATCH_QUEUE_SERIAL); lib::init(); }
+    if ((self=[super init])) { _worker=dispatch_queue_create("com.rubycore.mumble.libmumble.transport",DISPATCH_QUEUE_SERIAL); lib::init(); }
     return self;
 }
 - (void)dealloc { [_reconnectTimer invalidate];if(_pathMonitor)nw_path_monitor_cancel(_pathMonitor);if (_state) _state->cancel(); lib::deinit(); }

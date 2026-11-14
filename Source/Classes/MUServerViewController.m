@@ -471,7 +471,9 @@ static UIFont *MUServerFont(UIFontTextStyle style, BOOL bold, UITraitCollection 
         return;
     }
     [self removeVoiceDock];
-    [self installVoiceDock];
+    // Reconnect can refresh a pane while its presentation is still changing.
+    // Use the same visibility/host checks as the normal layout pass.
+    [self layoutVoiceControls];
     [self updateChannelSummary];
 }
 

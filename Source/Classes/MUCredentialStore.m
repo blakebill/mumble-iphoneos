@@ -4,7 +4,7 @@ NSNotificationName const MUCredentialStorageDidFailNotification=@"MUCredentialSt
 @implementation MUCredentialStore
 + (NSDictionary *)queryForAccount:(NSString *)account {
     return @{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,
-        (__bridge id)kSecAttrService:[NSBundle.mainBundle.bundleIdentifier ?: @"info.mumble.iphoneos" stringByAppendingString:@".server-credentials.v1"],
+        (__bridge id)kSecAttrService:[NSBundle.mainBundle.bundleIdentifier ?: @"com.rubycore.mumble" stringByAppendingString:@".server-credentials.v1"],
         (__bridge id)kSecAttrAccount:account,
         (__bridge id)kSecAttrSynchronizable:@NO};
 }
