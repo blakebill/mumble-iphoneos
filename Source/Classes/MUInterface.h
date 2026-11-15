@@ -5,8 +5,9 @@ static inline void MUConfigureServerActionSheet(UIAlertController *sheet, UIView
     UIPopoverPresentationController *popover = sheet.popoverPresentationController;
     popover.sourceView = sourceView;
     popover.sourceRect = CGRectNull;
-    // The arrow points down to the selected row, so the menu opens above it.
-    popover.permittedArrowDirections = UIPopoverArrowDirectionDown;
+    // Let UIKit open above or below the row without compressing the menu
+    // against the navigation bar when the first server is selected.
+    popover.permittedArrowDirections = UIPopoverArrowDirectionUp | UIPopoverArrowDirectionDown;
 }
 
 static inline void MUApplyRootLargeTitle(UIViewController *controller) {

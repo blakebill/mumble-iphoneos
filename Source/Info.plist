@@ -34,7 +34,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1005000001</string>
+	<string>1005000002</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_mumble._tcp</string>
