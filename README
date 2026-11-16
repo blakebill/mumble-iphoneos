@@ -88,6 +88,3 @@ iOS 18; older iOS versions use compatibility paths and a static app icon.
 
 This project originates from the [Mumble iOS application](https://github.com/mumble-voip/mumble-iphoneos).
 Mumble is an open-source voice chat application: [mumble.info](https://www.mumble.info/).
-
-App Store release materials and the English Hexo privacy policy are in
-[Distribution/AppStore](Distribution/AppStore/README.md).

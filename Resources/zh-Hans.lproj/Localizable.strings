@@ -305,3 +305,6 @@
 "The credentials could not be saved securely. Please try again." = "无法安全保存凭据，请重试。";
 "Reconnecting… (attempt %lu)" = "正在重新连接…（第 %lu 次尝试）";
 "The server certificate changed. Reconnect manually to review it." = "服务器证书已更改，请手动重新连接以检查证书。";
+
+/* Public privacy policy in About. */
+"Privacy Policy" = "隐私政策";

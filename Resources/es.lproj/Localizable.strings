@@ -305,3 +305,6 @@
 "The credentials could not be saved securely. Please try again." = "No se pudieron guardar las credenciales de forma segura. Inténtalo de nuevo.";
 "Reconnecting… (attempt %lu)" = "Reconectando… (intento %lu)";
 "The server certificate changed. Reconnect manually to review it." = "El certificado del servidor ha cambiado. Vuelve a conectarte manualmente para revisarlo.";
+
+/* Public privacy policy in About. */
+"Privacy Policy" = "Política de privacidad";

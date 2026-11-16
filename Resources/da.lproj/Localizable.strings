@@ -305,3 +305,6 @@
 "The credentials could not be saved securely. Please try again." = "Loginoplysningerne kunne ikke gemmes sikkert. Prøv igen.";
 "Reconnecting… (attempt %lu)" = "Opretter forbindelse igen… (forsøg %lu)";
 "The server certificate changed. Reconnect manually to review it." = "Serverens certifikat er ændret. Opret forbindelse manuelt for at kontrollere det.";
+
+/* Public privacy policy in About. */
+"Privacy Policy" = "Privatlivspolitik";

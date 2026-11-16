@@ -305,3 +305,6 @@
 "The credentials could not be saved securely. Please try again." = "無法安全儲存憑證資料，請再試一次。";
 "Reconnecting… (attempt %lu)" = "正在重新連線…（第 %lu 次嘗試）";
 "The server certificate changed. Reconnect manually to review it." = "伺服器憑證已變更，請手動重新連線以檢查憑證。";
+
+/* Public privacy policy in About. */
+"Privacy Policy" = "隱私權政策";

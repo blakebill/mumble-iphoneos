@@ -24,7 +24,7 @@
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? 1 : 3;
+    return section == 0 ? 1 : 4;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -43,8 +43,8 @@
         cell.accessoryType = UITableViewCellAccessoryNone;
     } else {
         content = [UIListContentConfiguration cellConfiguration];
-        content.text = @[NSLocalizedString(@"Website", nil), NSLocalizedString(@"Legal", nil), NSLocalizedString(@"Support", nil)][indexPath.row];
-        content.image = [UIImage systemImageNamed:@[@"globe", @"doc.text", @"questionmark.circle"][indexPath.row]];
+        content.text = @[NSLocalizedString(@"Website", nil), NSLocalizedString(@"Legal", nil), NSLocalizedString(@"Support", nil), NSLocalizedString(@"Privacy Policy", nil)][indexPath.row];
+        content.image = [UIImage systemImageNamed:@[@"globe", @"doc.text", @"questionmark.circle", @"hand.raised"][indexPath.row]];
         content.imageProperties.tintColor = UIColor.labelColor;
         content.imageProperties.reservedLayoutSize = CGSizeMake(28, 28);
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
@@ -61,7 +61,7 @@
         UINavigationController *navigation = [[UINavigationController alloc] initWithRootViewController:[MULegalViewController new]];
         [self presentViewController:navigation animated:YES completion:nil];
     } else {
-        NSString *address = indexPath.row == 0 ? @"https://github.com/blakebill/mumble-iphoneos" : @"https://github.com/blakebill/mumble-iphoneos/issues";
+        NSString *address = indexPath.row == 0 ? @"https://github.com/blakebill/mumble-iphoneos" : indexPath.row == 3 ? @"https://rubycore.pages.dev/en/mumble/privacy/" : @"https://github.com/blakebill/mumble-iphoneos/issues";
         [UIApplication.sharedApplication openURL:[NSURL URLWithString:address] options:@{} completionHandler:nil];
     }
 }

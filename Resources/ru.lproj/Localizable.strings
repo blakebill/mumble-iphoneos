@@ -305,3 +305,6 @@
 "The credentials could not be saved securely. Please try again." = "Не удалось безопасно сохранить учётные данные. Повторите попытку.";
 "Reconnecting… (attempt %lu)" = "Повторное подключение… (попытка %lu)";
 "The server certificate changed. Reconnect manually to review it." = "Сертификат сервера изменился. Подключитесь вручную, чтобы проверить его.";
+
+/* Public privacy policy in About. */
+"Privacy Policy" = "Политика конфиденциальности";

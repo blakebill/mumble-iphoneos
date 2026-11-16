@@ -305,3 +305,6 @@
 "The credentials could not be saved securely. Please try again." = "認証情報を安全に保存できませんでした。もう一度お試しください。";
 "Reconnecting… (attempt %lu)" = "再接続中…（%lu 回目）";
 "The server certificate changed. Reconnect manually to review it." = "サーバ証明書が変更されました。手動で再接続して確認してください。";
+
+/* Public privacy policy in About. */
+"Privacy Policy" = "プライバシーポリシー";
