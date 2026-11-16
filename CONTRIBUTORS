@@ -1,5 +1,5 @@
-// This is the official list of people who can contribute
-// (and typically have contributed) code to 'Mumble for iOS'.
+// This file lists contributors to 'Mumble for iOS', including
+// this independently maintained fork.
 
 Benjamin Jemlich <pcgod@users.sourceforge.net>
 Jimmy Selgen Nielsen <jimmy.selgen@gmail.com>
@@ -8,3 +8,4 @@ Mikkel Krautz <mikkel@krautz.dk>
 Stefan Hacker <dd0t@users.sourceforge.net>
 Thorvald Natvig <thorvald@natvig.com>
 fridtjof <fridtjof@das-labor.org>
+Zheng Jiaxin <apple@piggy.live>

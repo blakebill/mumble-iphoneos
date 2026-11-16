@@ -88,3 +88,7 @@ iOS 18; older iOS versions use compatibility paths and a static app icon.
 
 This project originates from the [Mumble iOS application](https://github.com/mumble-voip/mumble-iphoneos).
 Mumble is an open-source voice chat application: [mumble.info](https://www.mumble.info/).
+
+This unofficial fork is maintained by [Zheng Jiaxin (blakebill)](https://github.com/blakebill).
+Developer and contributor credits are listed in [AUTHORS](AUTHORS) and
+[CONTRIBUTORS](CONTRIBUTORS); the application is distributed under [LICENSE](LICENSE).
